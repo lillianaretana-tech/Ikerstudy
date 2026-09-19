@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>IKER Studio · V1.11</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#201a1d">
+<meta name="application-name" content="IKER STUDIO">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IKER STUDIO">
+<link rel="apple-touch-icon" href="iker-apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="iker-icon-192.png">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
@@ -847,4 +856,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   </section>
  </div>
 </div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .catch(err => console.error('Service Worker:', err));
+  });
+}
+</script>
+
 </body></html>
