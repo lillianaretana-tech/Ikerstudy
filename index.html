@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio</title>
+<title>IKER Studio · V1.2</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
@@ -91,7 +91,17 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <section id="equipo" class="view">
 <div class="sectionTitle"><h2>Equipo</h2></div>
 <div class="panel"><h3>Personas con acceso a Beauty</h3><div id="teamList"></div>
-<p class="note">Iker es propietario. Yadira y los demás colaboradores aparecerán aquí cuando se creen sus accesos.</p></div>
+<p class="note">Iker es propietario. Los colaboradores conservan su historial aunque luego se desactive su acceso.</p></div>
+<div class="panel"><h3>Agregar persona</h3>
+ <div class="grid">
+  <label>Nombre completo<input id="teamName" placeholder="Ej. Yadira"></label>
+  <label>Correo<input id="teamEmail" type="email" placeholder="correo@ejemplo.com"></label>
+  <label>Rol<select id="teamRole"><option value="worker">Profesional</option><option value="admin">Administradora</option></select></label>
+  <label>Contraseña temporal<input id="teamPassword" type="password" minlength="8" placeholder="Mínimo 8 caracteres"></label>
+ </div>
+ <p class="note">La persona podrá entrar con este correo y contraseña. Luego puede cambiar su contraseña desde Supabase Auth cuando implementemos recuperación.</p>
+ <button class="primary" onclick="addTeamMember()">Crear acceso</button>
+</div>
 <div class="panel"><h3>Servicios y comisión</h3>
  <div id="servicesList"></div>
  <div class="grid" style="margin-top:14px">
@@ -235,8 +245,41 @@ async function saveJob(){
 }
 function renderTeam(){
  if(!isAdmin())return;
- teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administrador':'Profesional'}</div></div><span class="pill">${x.active?'Activo':'Inactivo'}</span></div>`).join(''):'<div class="empty">No hay miembros.</div>';
- servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><span class="pill gold">${s.commission_rate}%</span></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
+ teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
+ servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div style="display:flex;gap:8px;align-items:center"><select style="width:auto;margin:0;padding:7px" onchange="updateServiceRate('${s.id}',this.value)"><option value="40" ${Number(s.commission_rate)===40?'selected':''}>40%</option><option value="50" ${Number(s.commission_rate)===50?'selected':''}>50%</option></select><button class="secondary" onclick="toggleService('${s.id}',false)">Desactivar</button></div></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
+}
+async function beautyUserAction(payload){
+ loading(true);
+ const {data,error}=await sb.functions.invoke('manage-beauty-user',{body:payload});
+ loading(false);
+ if(error) throw new Error(error.message||'No se pudo completar la acción.');
+ if(data && data.ok===false) throw new Error(data.error||'No se pudo completar la acción.');
+ return data;
+}
+async function addTeamMember(){
+ const full_name=teamName.value.trim(), email=teamEmail.value.trim(), password=teamPassword.value, r=teamRole.value;
+ if(!full_name||!email||password.length<8)return toast('Complete nombre, correo y una contraseña temporal de al menos 8 caracteres.');
+ try{
+  await beautyUserAction({action:'create',full_name,email,password,role:r});
+  teamName.value='';teamEmail.value='';teamPassword.value='';
+  toast('Acceso creado correctamente.');await loadAll();
+ }catch(e){toast('No se pudo crear: '+e.message)}
+}
+async function setTeamActive(user_id,active){
+ if(!confirm(active?'¿Activar nuevamente este acceso?':'¿Desactivar este acceso? Su historial se conservará.'))return;
+ try{await beautyUserAction({action:'set_active',user_id,active});toast(active?'Acceso activado.':'Acceso desactivado.');await loadAll()}catch(e){toast(e.message)}
+}
+async function changeTeamRole(user_id,r){
+ try{await beautyUserAction({action:'set_role',user_id,role:r});toast('Rol actualizado.');await loadAll()}catch(e){toast(e.message)}
+}
+async function updateServiceRate(id,rate){
+ loading(true);const {error}=await sb.from('beauty_services').update({commission_rate:Number(rate)}).eq('id',id);loading(false);
+ if(error)return toast('No se pudo cambiar la comisión.');toast('Comisión actualizada.');await loadAll();
+}
+async function toggleService(id,active){
+ if(!confirm('¿Desactivar este servicio? El historial anterior se conservará.'))return;
+ loading(true);const {error}=await sb.from('beauty_services').update({active}).eq('id',id);loading(false);
+ if(error)return toast('No se pudo actualizar.');toast('Servicio desactivado.');await loadAll();
 }
 async function addService(){
  const name=newServiceName.value.trim(), rate=Number(newServiceRate.value);if(!name)return toast('Escriba el nombre del servicio.');
