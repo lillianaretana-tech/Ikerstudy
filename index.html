@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IKER Studio</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+.shell{max-width:1100px;margin:auto;min-height:100vh;background:var(--paper);box-shadow:0 0 50px #3a25200f}
+header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fffaf5f2;backdrop-filter:blur(10px);z-index:10}
+.brand{font-family:Georgia,serif;font-size:23px;letter-spacing:3px}.brand small{display:block;font:10px Inter,sans-serif;letter-spacing:2px;color:var(--muted);margin-top:3px}
+.headRight{display:flex;gap:10px;align-items:center}.avatar{width:38px;height:38px;border-radius:50%;background:var(--ink);color:white;display:grid;place-items:center;font-weight:700}
+.logout{border:0;border-radius:20px;padding:8px 12px;background:#efe2d6;color:#6d3833;font-weight:700;cursor:pointer}
+main{padding:26px 24px 100px}.hello{font-family:Georgia,serif;font-size:32px;margin:0 0 6px}.sub{color:var(--muted);margin-bottom:22px}
+.tabs{display:flex;gap:8px;overflow:auto;margin-bottom:24px;padding-bottom:3px;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tab{border:1px solid var(--line);background:white;padding:10px 15px;border-radius:30px;white-space:nowrap;cursor:pointer}.tab.active{background:var(--ink);color:white;border-color:var(--ink)}
+.view{display:none}.view.active{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:white;border:1px solid var(--line);border-radius:18px;padding:17px}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}.value{font-family:Georgia,serif;font-size:25px;margin-top:8px}
+.panel{background:white;border:1px solid var(--line);border-radius:22px;padding:20px;margin-top:16px}.panel h3{margin:0 0 16px;font-family:Georgia,serif;font-size:21px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-size:12px;color:var(--muted);font-weight:600}select,input,textarea{width:100%;margin-top:6px;padding:13px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:15px;font-family:inherit}textarea{min-height:85px;resize:vertical}
+.pay{display:flex;gap:10px;margin-top:7px}.pay button{flex:1;padding:13px;border:1px solid var(--line);border-radius:12px;background:white;cursor:pointer}.pay button.on{background:#f0e1dc;border-color:var(--rose);font-weight:700}
+.primary{width:100%;margin-top:16px;padding:14px;border:0;border-radius:13px;background:var(--ink);color:white;font-weight:700;cursor:pointer}.secondary{padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:#f6e9df;color:#713c3c;font-weight:700;cursor:pointer}.danger{background:#f7dddd;color:#8d2e2e}
+.note{font-size:12px;color:var(--muted);margin-top:10px}.empty{text-align:center;padding:28px 12px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line)}th{font-size:11px;text-transform:uppercase;color:var(--muted)}
+.pill{display:inline-block;padding:5px 8px;border-radius:20px;background:#f3e5df;font-size:11px}.pill.gold{background:#f1e4cf}.row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}
+.money{font-family:Georgia,serif;font-weight:700}.right{text-align:right}.small{font-size:12px;color:var(--muted)}.hide{display:none!important}
+.loginWrap{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(145deg,#f7f1ea,#ecdcd2)}
+.loginCard{width:min(430px,100%);background:var(--paper);padding:28px;border-radius:24px;box-shadow:0 18px 50px #3b25201c;border:1px solid var(--line)}
+.loginBrand{font:700 28px Georgia,serif;letter-spacing:2px}.loginBrand small{display:block;font:11px Inter,sans-serif;color:var(--muted);letter-spacing:2px;margin-top:5px}
+.msg{margin-top:12px;font-size:13px;color:var(--danger)}.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:white;padding:12px 18px;border-radius:30px;display:none;z-index:30;max-width:90%;text-align:center}
+.loading{position:fixed;inset:0;background:#fffaf5dd;display:none;place-items:center;z-index:50;font-weight:800;color:#6f3d3d}
+.sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.sectionTitle h2{font:24px Georgia,serif;margin:0}.statusLow{color:#a33e32;font-weight:700}
+@media(max-width:700px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.hello{font-size:28px}main{padding:20px 16px 90px}header{padding:18px 16px}.hide-mobile{display:none}.brand{font-size:20px}.panel{padding:16px}table{font-size:12px}th,td{padding:10px 5px}}
+</style>
+</head>
+<body>
+<div id="loading" class="loading">Cargando IKER STUDIO…</div>
+
+<div id="loginScreen" class="loginWrap">
+  <div class="loginCard">
+    <div class="loginBrand">IKER STUDIO<small>BEAUTY · HAIR · NAILS</small></div>
+    <p style="color:var(--muted)">Acceso seguro al sistema del salón.</p>
+    <label>Correo<input id="email" type="email" autocomplete="username"></label>
+    <label style="display:block;margin-top:12px">Contraseña<input id="password" type="password" autocomplete="current-password"></label>
+    <button class="primary" onclick="login()">Ingresar</button>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</div>
+
+<div id="app" class="shell hide">
+<header>
+  <div class="brand">IKER STUDIO<small>BEAUTY · HAIR · NAILS</small></div>
+  <div class="headRight"><button class="logout" onclick="logout()">Salir</button><div class="avatar" id="avatar">I</div></div>
+</header>
+<main>
+<h1 class="hello" id="hello">Hola.</h1><div class="sub" id="subtitle">Así se está moviendo el estudio hoy.</div>
+<div class="tabs" id="tabs">
+<button class="tab active" data-view="resumen" onclick="show('resumen',this)">Resumen</button>
+<button class="tab" data-view="registro" onclick="show('registro',this)">Nuevo trabajo</button>
+<button class="tab ownerTab" data-view="equipo" onclick="show('equipo',this)">Equipo</button>
+<button class="tab" data-view="historial" onclick="show('historial',this)">Historial</button>
+<button class="tab ownerTab" data-view="inventario" onclick="show('inventario',this)">Inventario</button>
+<button class="tab ownerTab" data-view="gastos" onclick="show('gastos',this)">Gastos</button>
+<button class="tab ownerTab" data-view="negocio" onclick="show('negocio',this)">Negocio</button>
+</div>
+
+<section id="resumen" class="view active">
+<div class="cards">
+ <div class="card"><div class="label">Ventas hoy</div><div class="value" id="salesToday">₡0</div></div>
+ <div class="card"><div class="label">Efectivo</div><div class="value" id="cashToday">₡0</div></div>
+ <div class="card"><div class="label">SINPE</div><div class="value" id="sinpeToday">₡0</div></div>
+ <div class="card"><div class="label">Comisiones</div><div class="value" id="commToday">₡0</div></div>
+</div>
+<div class="panel"><h3>Producción de hoy</h3><div id="todayWorkers" class="empty">Sin trabajos registrados hoy.</div></div>
+</section>
+
+<section id="registro" class="view">
+<div class="panel"><h3>Registrar trabajo</h3>
+ <div class="grid">
+  <label>Profesional<select id="jobWorker"></select></label>
+  <label>Cliente (opcional)<input id="jobClient" placeholder="Nombre del cliente"></label>
+  <label>Servicio<select id="jobService" onchange="serviceChanged()"></select></label>
+  <label>Monto cobrado ₡<input id="jobAmount" type="number" min="0" step="100" placeholder="0"></label>
+ </div>
+ <div style="margin-top:14px"><label>Forma de pago</label><div class="pay"><button id="payCash" class="on" onclick="setPay('cash')">Efectivo</button><button id="paySinpe" onclick="setPay('sinpe')">SINPE</button></div></div>
+ <div class="note" id="commissionHint">Seleccione un servicio para ver la comisión.</div>
+ <button class="primary" onclick="saveJob()">Guardar trabajo</button>
+</div>
+</section>
+
+<section id="equipo" class="view">
+<div class="sectionTitle"><h2>Equipo</h2></div>
+<div class="panel"><h3>Personas con acceso a Beauty</h3><div id="teamList"></div>
+<p class="note">Iker es propietario. Yadira y los demás colaboradores aparecerán aquí cuando se creen sus accesos.</p></div>
+<div class="panel"><h3>Servicios y comisión</h3>
+ <div id="servicesList"></div>
+ <div class="grid" style="margin-top:14px">
+  <label>Nuevo servicio<input id="newServiceName" placeholder="Ej. Nanoplastia"></label>
+  <label>Comisión<select id="newServiceRate"><option value="40">40%</option><option value="50">50%</option></select></label>
+ </div>
+ <button class="primary" onclick="addService()">Agregar servicio</button>
+</div>
+</section>
+
+<section id="historial" class="view">
+<div class="sectionTitle"><h2>Historial</h2><input id="historyDate" type="date" style="width:auto;margin:0" onchange="renderHistory()"></div>
+<div class="panel"><div id="historyList"></div></div>
+</section>
+
+<section id="inventario" class="view">
+<div class="sectionTitle"><h2>Inventario</h2><button class="secondary" onclick="toggle('inventoryForm')">+ Producto</button></div>
+<div id="inventoryForm" class="panel hide"><h3>Agregar producto</h3>
+ <div class="grid">
+  <label>Producto<input id="invName"></label><label>Categoría<input id="invCategory"></label>
+  <label>Tipo<select id="invType"><option value="salon_use">Uso del salón</option><option value="resale">Reventa</option></select></label>
+  <label>Unidad<input id="invUnit" value="unidad"></label>
+  <label>Existencia inicial<input id="invQty" type="number" step="0.01" value="0"></label>
+  <label>Mínimo<input id="invMin" type="number" step="0.01" value="0"></label>
+ </div><button class="primary" onclick="addInventory()">Guardar producto</button>
+</div>
+<div class="panel"><div id="inventoryList"></div></div>
+</section>
+
+<section id="gastos" class="view">
+<div class="sectionTitle"><h2>Gastos</h2><button class="secondary" onclick="toggle('expenseForm')">+ Registrar</button></div>
+<div id="expenseForm" class="panel hide"><h3>Registrar gasto</h3>
+ <div class="grid"><label>Categoría<input id="expCategory" placeholder="Productos, servicios, otros"></label><label>Monto ₡<input id="expAmount" type="number" min="0"></label></div>
+ <label style="display:block;margin-top:12px">Descripción<input id="expDescription"></label>
+ <button class="primary" onclick="addExpense()">Guardar gasto</button>
+</div>
+<div class="panel"><div id="expensesList"></div></div>
+</section>
+
+<section id="negocio" class="view">
+<div class="cards">
+ <div class="card"><div class="label">Ventas del mes</div><div class="value" id="monthSales">₡0</div></div>
+ <div class="card"><div class="label">Comisiones</div><div class="value" id="monthComms">₡0</div></div>
+ <div class="card"><div class="label">Gastos</div><div class="value" id="monthExpenses">₡0</div></div>
+ <div class="card"><div class="label">Resultado estimado</div><div class="value" id="monthNet">₡0</div></div>
+</div>
+<div class="panel"><h3>Producción por profesional · mes</h3><div id="monthWorkers"></div></div>
+</section>
+</main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const SUPABASE_URL='https://mzsxdobicqmbnajqpbfe.supabase.co';
+const SUPABASE_KEY='sb_publishable_ekWbZ5tswWwlGXW5DeP-uA_9yMDXwk4';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], expenses=[], payMethod='cash';
+
+const money=n=>'₡'+Math.round(Number(n||0)).toLocaleString('es-CR');
+const localDate=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
+const monthStart=()=>localDate().slice(0,7)+'-01';
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function loading(v){document.getElementById('loading').style.display=v?'grid':'none'}
+function toast(t){const x=document.getElementById('toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',2600)}
+function toggle(id){document.getElementById(id).classList.toggle('hide')}
+function show(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory()}
+function setPay(m){payMethod=m;payCash.classList.toggle('on',m==='cash');paySinpe.classList.toggle('on',m==='sinpe')}
+function isAdmin(){return ['owner','admin'].includes(role)}
+
+async function login(){
+ document.getElementById('loginMsg').textContent=''; loading(true);
+ const {data,error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:password.value});
+ if(error){loading(false);document.getElementById('loginMsg').textContent='No se pudo ingresar. Revise correo y contraseña.';return}
+ await boot(data.session);
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+
+async function boot(s){
+ session=s; loading(true);
+ const uid=s.user.id;
+ const [{data:p},{data:a,error:ae}]=await Promise.all([
+  sb.from('app_profiles').select('*').eq('user_id',uid).maybeSingle(),
+  sb.from('app_access').select('role,active').eq('user_id',uid).eq('app','beauty').maybeSingle()
+ ]);
+ if(ae||!a||!a.active){loading(false);document.getElementById('loginMsg').textContent='Esta cuenta todavía no tiene acceso a IKER STUDIO.';await sb.auth.signOut();return}
+ profile=p||{full_name:s.user.email}; role=a.role;
+ document.getElementById('loginScreen').classList.add('hide'); document.getElementById('app').classList.remove('hide');
+ hello.textContent='Hola, '+(profile.full_name||'').split(' ')[0]+'.';
+ avatar.textContent=(profile.full_name||'I').charAt(0).toUpperCase();
+ if(!isAdmin()) document.querySelectorAll('.ownerTab').forEach(x=>x.classList.add('hide'));
+ await loadAll(); loading(false);
+}
+async function loadAll(){
+ const uid=session.user.id;
+ let queries=[
+  sb.from('beauty_services').select('*').eq('active',true).order('name'),
+  sb.from('beauty_jobs').select('*').gte('performed_at',monthStart()+'T00:00:00').order('performed_at',{ascending:false})
+ ];
+ if(isAdmin()){
+  queries.push(sb.from('app_access').select('user_id,role,active').eq('app','beauty'));
+  queries.push(sb.from('beauty_inventory').select('*').eq('active',true).order('name'));
+  queries.push(sb.from('beauty_expenses').select('*').gte('expense_date',monthStart()).order('expense_date',{ascending:false}));
+ }
+ const rs=await Promise.all(queries);
+ services=rs[0].data||[]; jobs=rs[1].data||[];
+ if(isAdmin()){
+   const accesses=rs[2].data||[], ids=accesses.map(x=>x.user_id);
+   let profiles=[];
+   if(ids.length){const pr=await sb.from('app_profiles').select('*').in('user_id',ids);profiles=pr.data||[]}
+   team=accesses.map(a=>({...a,profile:profiles.find(p=>p.user_id===a.user_id)}));
+   inventory=rs[3].data||[]; expenses=rs[4].data||[];
+ }else{
+   team=[{user_id:uid,role,active:true,profile}];
+ }
+ renderAll();
+}
+function renderAll(){
+ jobService.innerHTML='<option value="">Seleccione servicio</option>'+services.map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.commission_rate}%</option>`).join('');
+ const workers=team.filter(x=>x.active&&['owner','admin','worker'].includes(x.role));
+ jobWorker.innerHTML=workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Usuario')}</option>`).join('');
+ if(!isAdmin()) jobWorker.value=session.user.id;
+ renderDashboard(); renderTeam(); renderInventory(); renderExpenses(); renderBusiness(); renderHistory();
+}
+function workerName(id){return team.find(x=>x.user_id===id)?.profile?.full_name||'Profesional'}
+function serviceName(id){return services.find(x=>x.id===id)?.name||'Servicio'}
+function renderDashboard(){
+ const d=localDate(), todays=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
+ const sales=todays.reduce((s,j)=>s+Number(j.amount),0), cash=todays.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0), sinpe=sales-cash, comm=todays.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
+ salesToday.textContent=money(sales);cashToday.textContent=money(cash);sinpeToday.textContent=money(sinpe);commToday.textContent=money(comm);
+ const by={};todays.forEach(j=>{by[j.worker_id]??={sales:0,comm:0,count:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100;by[j.worker_id].count++});
+ todayWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><div><b>${esc(workerName(id))}</b><div class="small">${x.count} trabajo(s)</div></div><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
+}
+function serviceChanged(){const s=services.find(x=>x.id===jobService.value);commissionHint.textContent=s?`Este servicio paga ${s.commission_rate}% de comisión al profesional.`:'Seleccione un servicio para ver la comisión.'}
+async function saveJob(){
+ const s=services.find(x=>x.id===jobService.value), amount=Number(jobAmount.value);
+ if(!jobWorker.value||!s||!(amount>0)){toast('Complete profesional, servicio y monto.');return}
+ loading(true);
+ const {error}=await sb.from('beauty_jobs').insert({worker_id:jobWorker.value,client_name:jobClient.value.trim()||null,service_id:s.id,description:s.name,amount,commission_rate:s.commission_rate,payment_method:payMethod,created_by:session.user.id});
+ loading(false);if(error){toast('No se pudo guardar: '+error.message);return}
+ jobClient.value='';jobAmount.value='';toast('Trabajo registrado correctamente.');await loadAll();show('resumen',document.querySelector('[data-view="resumen"]'));
+}
+function renderTeam(){
+ if(!isAdmin())return;
+ teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administrador':'Profesional'}</div></div><span class="pill">${x.active?'Activo':'Inactivo'}</span></div>`).join(''):'<div class="empty">No hay miembros.</div>';
+ servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><span class="pill gold">${s.commission_rate}%</span></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
+}
+async function addService(){
+ const name=newServiceName.value.trim(), rate=Number(newServiceRate.value);if(!name)return toast('Escriba el nombre del servicio.');
+ loading(true);const {error}=await sb.from('beauty_services').insert({name,commission_rate:rate});loading(false);
+ if(error)return toast('No se pudo agregar: '+error.message);newServiceName.value='';toast('Servicio agregado.');await loadAll();
+}
+function renderHistory(){
+ const d=historyDate.value||localDate(); if(!historyDate.value)historyDate.value=d;
+ const list=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
+ historyList.innerHTML=list.length?list.map(j=>`<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${j.commission_rate}%</div></div></div>`).join(''):'<div class="empty">No hay trabajos en esta fecha.</div>';
+}
+function renderInventory(){
+ if(!isAdmin())return;
+ inventoryList.innerHTML=inventory.length?inventory.map(i=>`<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}</div></div><div class="right"><div class="${Number(i.current_qty)<=Number(i.minimum_qty)?'statusLow':''}">${Number(i.current_qty)} ${esc(i.unit)}</div><div class="small">Mín. ${Number(i.minimum_qty)}</div></div></div>`).join(''):'<div class="empty">Aún no hay productos.</div>';
+}
+async function addInventory(){
+ const name=invName.value.trim();if(!name)return toast('Escriba el producto.');
+ loading(true);const {error}=await sb.from('beauty_inventory').insert({name,category:invCategory.value.trim()||null,item_type:invType.value,unit:invUnit.value.trim()||'unidad',current_qty:Number(invQty.value||0),minimum_qty:Number(invMin.value||0)});loading(false);
+ if(error)return toast('No se pudo guardar: '+error.message);invName.value='';invCategory.value='';toast('Producto agregado.');toggle('inventoryForm');await loadAll();
+}
+function renderExpenses(){
+ if(!isAdmin())return;
+ expensesList.innerHTML=expenses.length?expenses.map(e=>`<div class="row"><div><b>${esc(e.description)}</b><div class="small">${esc(e.category)} · ${e.expense_date}</div></div><div class="money">${money(e.amount)}</div></div>`).join(''):'<div class="empty">No hay gastos este mes.</div>';
+}
+async function addExpense(){
+ const amount=Number(expAmount.value),desc=expDescription.value.trim(),cat=expCategory.value.trim();if(!(amount>0)||!desc||!cat)return toast('Complete categoría, descripción y monto.');
+ loading(true);const {error}=await sb.from('beauty_expenses').insert({category:cat,description:desc,amount,expense_date:localDate()});loading(false);
+ if(error)return toast('No se pudo guardar: '+error.message);expAmount.value='';expDescription.value='';expCategory.value='';toast('Gasto registrado.');toggle('expenseForm');await loadAll();
+}
+function renderBusiness(){
+ if(!isAdmin())return;
+ const sales=jobs.reduce((s,j)=>s+Number(j.amount),0),comms=jobs.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0),exps=expenses.reduce((s,e)=>s+Number(e.amount),0);
+ monthSales.textContent=money(sales);monthComms.textContent=money(comms);monthExpenses.textContent=money(exps);monthNet.textContent=money(sales-comms-exps);
+ const by={};jobs.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100});
+ monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción este mes.</div>';
+}
+
+(async()=>{
+ const {data}=await sb.auth.getSession();
+ if(data.session) await boot(data.session);
+})();
+</script>
+</body></html>
