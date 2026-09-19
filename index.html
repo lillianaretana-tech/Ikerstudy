@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.4.1</title>
+<title>IKER Studio · V1.4.2</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
@@ -87,6 +87,9 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
  @page{size:A4;margin:0}
 }
 
+
+#businessReport.report-preview-open{display:block!important;border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.25)}
+@media print{.no-print{display:none!important}#reportPreviewBackdrop{display:block!important;position:static!important;background:#fff!important;padding:0!important}}
 </style>
 </head>
 <body>
@@ -211,7 +214,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
   </label>
   <label id="bizFromWrap" style="display:none">Desde <input id="bizFrom" type="date"></label>
   <label id="bizToWrap" style="display:none">Hasta <input id="bizTo" type="date"></label>
-  <button class="primary" id="btnBusinessReport" type="button" onclick="openBusinessReport()">Ver / imprimir reporte</button>
+  <button class="primary" id="btnBusinessReport" type="button">Ver / imprimir reporte</button>
 </div>
 <div class="cards">
  <div class="card"><div class="label">Ventas del período</div><div class="value" id="monthSales">₡0</div></div>
@@ -419,7 +422,54 @@ function renderBusiness(){
  const {data}=await sb.auth.getSession();
  if(data.session) await boot(data.session);
 })();
+
+function reportLocalDate(d){
+ return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function updateBusinessPeriod(){
+ const period=document.getElementById('bizPeriod');
+ const custom=period && period.value==='custom';
+ const fw=document.getElementById('bizFromWrap'),tw=document.getElementById('bizToWrap');
+ if(fw)fw.style.display=custom?'grid':'none';
+ if(tw)tw.style.display=custom?'grid':'none';
+ renderBusiness();
+}
+function openBusinessReport(){
+ const x=renderBusiness();
+ if(!x){toast('No se pudo preparar el reporte.');return;}
+ const g=id=>document.getElementById(id);
+ g('reportPeriod').textContent=`Período: ${reportLocalDate(x.from)} al ${reportLocalDate(x.to)}`;
+ g('reportGenerated').textContent=`Generado: ${new Date().toLocaleString('es-CR')}`;
+ g('rSales').textContent=money(x.sales); g('rCash').textContent=money(x.cash);
+ g('rSinpe').textContent=money(x.sinpe); g('rComms').textContent=money(x.comms);
+ g('rExpenses').textContent=money(x.exps); g('rAfter').textContent=money(x.afterComms);
+ g('rNet').textContent=money(x.net);
+ g('rWorkers').innerHTML=Object.keys(x.by).length
+   ?Object.entries(x.by).map(([id,v])=>`<tr><td>${esc(workerName(id))}</td><td>${money(v.sales)}</td><td>${money(v.comm)}</td></tr>`).join('')
+   :'<tr><td colspan="3">Sin producción en el período.</td></tr>';
+ document.getElementById('businessReport').classList.add('report-preview-open');
+ document.getElementById('reportPreviewBackdrop').style.display='flex';
+}
+function closeBusinessReport(){
+ document.getElementById('reportPreviewBackdrop').style.display='none';
+ document.getElementById('businessReport').classList.remove('report-preview-open');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+ document.getElementById('bizPeriod')?.addEventListener('change',updateBusinessPeriod);
+ document.getElementById('bizFrom')?.addEventListener('change',renderBusiness);
+ document.getElementById('bizTo')?.addEventListener('change',renderBusiness);
+ document.getElementById('btnBusinessReport')?.addEventListener('click',openBusinessReport);
+ document.getElementById('btnCloseBusinessReport')?.addEventListener('click',closeBusinessReport);
+ document.getElementById('btnPrintBusinessReport')?.addEventListener('click',()=>window.print());
+});
+
 </script>
+<div id="reportPreviewBackdrop" style="display:none;position:fixed;inset:0;background:rgba(20,16,16,.65);z-index:9999;overflow:auto;padding:20px">
+<div style="width:min(900px,100%);margin:auto">
+<div class="no-print" style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px">
+<button id="btnCloseBusinessReport" type="button" style="width:auto">Cerrar</button>
+<button id="btnPrintBusinessReport" class="primary" type="button" style="width:auto">Imprimir / Guardar PDF</button>
+</div>
 <section id="businessReport" class="report-sheet">
   <div class="report-head">
     <div><h1>IKER STUDIO</h1><div>REPORTE FINANCIERO Y DE PRODUCCIÓN</div></div>
@@ -438,4 +488,5 @@ function renderBusiness(){
   <table class="report-table"><thead><tr><th>Profesional</th><th>Ventas</th><th>Comisión</th></tr></thead><tbody id="rWorkers"></tbody></table>
   <div class="report-foot">Reporte generado por IKER STUDIO · Sistema desarrollado por LillyTech · 3RS Integrated Solutions</div>
 </section>
+</div></div>
 </body></html>
