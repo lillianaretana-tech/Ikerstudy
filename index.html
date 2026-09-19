@@ -3,25 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.4</title>
+<title>IKER Studio · V1.4.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
- const custom=bizPeriod.value==='custom';
- bizFromWrap.style.display=custom?'grid':'none'; bizToWrap.style.display=custom?'grid':'none';
+ const period=document.getElementById('bizPeriod');
+ const fromWrap=document.getElementById('bizFromWrap'),toWrap=document.getElementById('bizToWrap');
+ if(!period)return;
+ const custom=period.value==='custom';
+ if(fromWrap)fromWrap.style.display=custom?'grid':'none';
+ if(toWrap)toWrap.style.display=custom?'grid':'none';
  renderBusiness();
 }
-bizPeriod?.addEventListener('change',updateBusinessPeriod);
-bizFrom?.addEventListener('change',renderBusiness); bizTo?.addEventListener('change',renderBusiness);
-btnBusinessReport?.addEventListener('click',()=>{
- const x=renderBusiness(); if(!x)return;
- reportPeriod.textContent=`Período: ${localDate(x.from)} al ${localDate(x.to)}`;
- reportGenerated.textContent=`Generado: ${new Date().toLocaleString('es-CR')}`;
- rSales.textContent=money(x.sales);rCash.textContent=money(x.cash);rSinpe.textContent=money(x.sinpe);
- rComms.textContent=money(x.comms);rExpenses.textContent=money(x.exps);rAfter.textContent=money(x.afterComms);rNet.textContent=money(x.net);
- rWorkers.innerHTML=Object.keys(x.by).length?Object.entries(x.by).map(([id,v])=>`<tr><td>${esc(workerName(id))}</td><td>${money(v.sales)}</td><td>${money(v.comm)}</td></tr>`).join(''):'<tr><td colspan="3">Sin producción en el período.</td></tr>';
- window.print();
-});
+function openBusinessReport(){
+ try{
+   const x=renderBusiness(); if(!x){alert('No se pudo preparar el reporte.');return}
+   const byId=id=>document.getElementById(id);
+   byId('reportPeriod').textContent=`Período: ${localDate(x.from)} al ${localDate(x.to)}`;
+   byId('reportGenerated').textContent=`Generado: ${new Date().toLocaleString('es-CR')}`;
+   byId('rSales').textContent=money(x.sales); byId('rCash').textContent=money(x.cash);
+   byId('rSinpe').textContent=money(x.sinpe); byId('rComms').textContent=money(x.comms);
+   byId('rExpenses').textContent=money(x.exps); byId('rAfter').textContent=money(x.afterComms);
+   byId('rNet').textContent=money(x.net);
+   byId('rWorkers').innerHTML=Object.keys(x.by).length
+     ?Object.entries(x.by).map(([id,v])=>`<tr><td>${esc(workerName(id))}</td><td>${money(v.sales)}</td><td>${money(v.comm)}</td></tr>`).join('')
+     :'<tr><td colspan="3">Sin producción en el período.</td></tr>';
+   setTimeout(()=>window.print(),150);
+ }catch(err){
+   console.error(err);
+   alert('No se pudo abrir el reporte: '+(err?.message||err));
+ }
+}
+document.getElementById('bizPeriod')?.addEventListener('change',updateBusinessPeriod);
+document.getElementById('bizFrom')?.addEventListener('change',renderBusiness);
+document.getElementById('bizTo')?.addEventListener('change',renderBusiness);
 
 </script>
 <style>
@@ -196,7 +211,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
   </label>
   <label id="bizFromWrap" style="display:none">Desde <input id="bizFrom" type="date"></label>
   <label id="bizToWrap" style="display:none">Hasta <input id="bizTo" type="date"></label>
-  <button class="primary" id="btnBusinessReport" type="button">Ver / imprimir reporte</button>
+  <button class="primary" id="btnBusinessReport" type="button" onclick="openBusinessReport()">Ver / imprimir reporte</button>
 </div>
 <div class="cards">
  <div class="card"><div class="label">Ventas del período</div><div class="value" id="monthSales">₡0</div></div>
