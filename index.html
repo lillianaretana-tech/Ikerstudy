@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>IKER Studio · V1.9</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
  const period=document.getElementById('bizPeriod');
@@ -37,7 +38,6 @@ function openBusinessReport(){
 document.getElementById('bizPeriod')?.addEventListener('change',updateBusinessPeriod);
 document.getElementById('bizFrom')?.addEventListener('change',renderBusiness);
 document.getElementById('bizTo')?.addEventListener('change',renderBusiness);
-
 </script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
