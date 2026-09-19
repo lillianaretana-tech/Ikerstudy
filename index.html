@@ -3,8 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.3</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<title>IKER Studio · V1.4</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
+function updateBusinessPeriod(){
+ const custom=bizPeriod.value==='custom';
+ bizFromWrap.style.display=custom?'grid':'none'; bizToWrap.style.display=custom?'grid':'none';
+ renderBusiness();
+}
+bizPeriod?.addEventListener('change',updateBusinessPeriod);
+bizFrom?.addEventListener('change',renderBusiness); bizTo?.addEventListener('change',renderBusiness);
+btnBusinessReport?.addEventListener('click',()=>{
+ const x=renderBusiness(); if(!x)return;
+ reportPeriod.textContent=`Período: ${localDate(x.from)} al ${localDate(x.to)}`;
+ reportGenerated.textContent=`Generado: ${new Date().toLocaleString('es-CR')}`;
+ rSales.textContent=money(x.sales);rCash.textContent=money(x.cash);rSinpe.textContent=money(x.sinpe);
+ rComms.textContent=money(x.comms);rExpenses.textContent=money(x.exps);rAfter.textContent=money(x.afterComms);rNet.textContent=money(x.net);
+ rWorkers.innerHTML=Object.keys(x.by).length?Object.entries(x.by).map(([id,v])=>`<tr><td>${esc(workerName(id))}</td><td>${money(v.sales)}</td><td>${money(v.comm)}</td></tr>`).join(''):'<tr><td colspan="3">Sin producción en el período.</td></tr>';
+ window.print();
+});
+
+</script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -31,6 +50,28 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 .loading{position:fixed;inset:0;background:#fffaf5dd;display:none;place-items:center;z-index:50;font-weight:800;color:#6f3d3d}
 .sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.sectionTitle h2{font:24px Georgia,serif;margin:0}.statusLow{color:#a33e32;font-weight:700}
 @media(max-width:700px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.hello{font-size:28px}main{padding:20px 16px 90px}header{padding:18px 16px}.hide-mobile{display:none}.brand{font-size:20px}.panel{padding:16px}table{font-size:12px}th,td{padding:10px 5px}}
+
+.biz-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:14px 0 18px}
+.biz-tools label{display:grid;gap:6px;font-size:12px;color:var(--muted);font-weight:700}
+.biz-tools select,.biz-tools input{min-width:150px}
+.biz-tools button{width:auto;min-width:150px}
+.report-sheet{display:none;background:#fff;color:#211d1d;padding:30px;font-family:Arial,sans-serif}
+.report-head{border-bottom:2px solid #211d1d;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;gap:20px}
+.report-head h1{font-family:Georgia,serif;letter-spacing:2px;margin:0 0 5px}
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin:18px 0}
+.report-line{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:8px 0}
+.report-total{font-size:18px;font-weight:800;border-top:2px solid #211d1d;margin-top:10px;padding-top:12px}
+.report-table{width:100%;border-collapse:collapse;margin-top:20px}
+.report-table th,.report-table td{padding:9px 7px;border-bottom:1px solid #ddd;text-align:left}
+.report-table th:last-child,.report-table td:last-child{text-align:right}
+.report-foot{margin-top:28px;font-size:11px;color:#666}
+@media print{
+ body *{visibility:hidden!important}
+ #businessReport,#businessReport *{visibility:visible!important}
+ #businessReport{display:block!important;position:absolute;left:0;top:0;width:100%;padding:18mm;background:#fff}
+ @page{size:A4;margin:0}
+}
+
 </style>
 </head>
 <body>
@@ -143,9 +184,22 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 
 <section id="negocio" class="view">
 <div class="sectionTitle"><h2>Negocio</h2></div>
-<p class="muted">Resumen del mes: cuánto se vendió, cómo ingresó el dinero, cuánto corresponde al equipo y cuánto queda para el negocio.</p>
+<p class="muted">Resumen del período: cuánto se vendió, cómo ingresó el dinero, cuánto corresponde al equipo y cuánto queda para el negocio.</p>
+<div class="biz-tools">
+  <label>Período
+    <select id="bizPeriod">
+      <option value="today">Hoy</option>
+      <option value="week">Esta semana</option>
+      <option value="month" selected>Este mes</option>
+      <option value="custom">Personalizado</option>
+    </select>
+  </label>
+  <label id="bizFromWrap" style="display:none">Desde <input id="bizFrom" type="date"></label>
+  <label id="bizToWrap" style="display:none">Hasta <input id="bizTo" type="date"></label>
+  <button class="primary" id="btnBusinessReport" type="button">Ver / imprimir reporte</button>
+</div>
 <div class="cards">
- <div class="card"><div class="label">Ventas del mes</div><div class="value" id="monthSales">₡0</div></div>
+ <div class="card"><div class="label">Ventas del período</div><div class="value" id="monthSales">₡0</div></div>
  <div class="card"><div class="label">Efectivo</div><div class="value" id="monthCash">₡0</div></div>
  <div class="card"><div class="label">SINPE</div><div class="value" id="monthSinpe">₡0</div></div>
  <div class="card"><div class="label">Comisiones por pagar</div><div class="value" id="monthComms">₡0</div></div>
@@ -153,7 +207,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
  <div class="card"><div class="label">Gastos</div><div class="value" id="monthExpenses">₡0</div></div>
  <div class="card" style="grid-column:1/-1"><div class="label">Resultado del negocio</div><div class="value" id="monthNet">₡0</div><div class="small">Ventas − comisiones − gastos</div></div>
 </div>
-<div class="panel"><h3>Producción por profesional · mes</h3><div id="monthWorkers"></div></div>
+<div class="panel"><h3>Producción por profesional · período</h3><div id="monthWorkers"></div></div>
 </section>
 </main>
 </div>
@@ -314,19 +368,36 @@ async function addExpense(){
  loading(true);const {error}=await sb.from('beauty_expenses').insert({category:cat,description:desc,amount,expense_date:localDate()});loading(false);
  if(error)return toast('No se pudo guardar: '+error.message);expAmount.value='';expDescription.value='';expCategory.value='';toast('Gasto registrado.');toggle('expenseForm');await loadAll();
 }
+function businessRange(){
+ const now=new Date(), p=document.getElementById('bizPeriod')?.value||'month';
+ let from,to=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59,999);
+ if(p==='today') from=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ else if(p==='week'){from=new Date(now);const d=(now.getDay()+6)%7;from.setDate(now.getDate()-d);from.setHours(0,0,0,0)}
+ else if(p==='custom'){
+   const a=document.getElementById('bizFrom').value,b=document.getElementById('bizTo').value;
+   from=a?new Date(a+'T00:00:00'):new Date(now.getFullYear(),now.getMonth(),1);
+   to=b?new Date(b+'T23:59:59'):to;
+ } else from=new Date(now.getFullYear(),now.getMonth(),1);
+ return {from,to,p};
+}
+function itemDate(x){return new Date(x.job_date||x.expense_date||x.created_at)}
 function renderBusiness(){
  if(!isAdmin())return;
- const sales=jobs.reduce((s,j)=>s+Number(j.amount),0);
- const cash=jobs.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0);
- const sinpe=jobs.filter(j=>j.payment_method==='sinpe').reduce((s,j)=>s+Number(j.amount),0);
- const comms=jobs.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
- const exps=expenses.reduce((s,e)=>s+Number(e.amount),0);
+ const {from,to}=businessRange();
+ const jj=jobs.filter(j=>{const d=itemDate(j);return d>=from&&d<=to});
+ const ee=expenses.filter(e=>{const d=itemDate(e);return d>=from&&d<=to});
+ const sales=jj.reduce((s,j)=>s+Number(j.amount),0);
+ const cash=jj.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0);
+ const sinpe=jj.filter(j=>j.payment_method==='sinpe').reduce((s,j)=>s+Number(j.amount),0);
+ const comms=jj.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
+ const exps=ee.reduce((s,e)=>s+Number(e.amount),0);
  const afterComms=sales-comms, net=afterComms-exps;
  monthSales.textContent=money(sales);monthCash.textContent=money(cash);monthSinpe.textContent=money(sinpe);
  monthComms.textContent=money(comms);monthAfterComms.textContent=money(afterComms);
  monthExpenses.textContent=money(exps);monthNet.textContent=money(net);
- const by={};jobs.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100});
- monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción este mes.</div>';
+ const by={};jj.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100});
+ monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción en este período.</div>';
+ return {from,to,sales,cash,sinpe,comms,exps,afterComms,net,by};
 }
 
 (async()=>{
@@ -334,4 +405,22 @@ function renderBusiness(){
  if(data.session) await boot(data.session);
 })();
 </script>
+<section id="businessReport" class="report-sheet">
+  <div class="report-head">
+    <div><h1>IKER STUDIO</h1><div>REPORTE FINANCIERO Y DE PRODUCCIÓN</div></div>
+    <div style="text-align:right"><b id="reportPeriod"></b><br><span id="reportGenerated"></span></div>
+  </div>
+  <div class="report-grid">
+    <div class="report-line"><span>Ventas</span><b id="rSales">₡0</b></div>
+    <div class="report-line"><span>Efectivo</span><b id="rCash">₡0</b></div>
+    <div class="report-line"><span>SINPE</span><b id="rSinpe">₡0</b></div>
+    <div class="report-line"><span>Comisiones por pagar</span><b id="rComms">₡0</b></div>
+    <div class="report-line"><span>Gastos</span><b id="rExpenses">₡0</b></div>
+    <div class="report-line"><span>Después de comisiones</span><b id="rAfter">₡0</b></div>
+  </div>
+  <div class="report-line report-total"><span>RESULTADO DEL NEGOCIO</span><b id="rNet">₡0</b></div>
+  <h3>Producción por profesional</h3>
+  <table class="report-table"><thead><tr><th>Profesional</th><th>Ventas</th><th>Comisión</th></tr></thead><tbody id="rWorkers"></tbody></table>
+  <div class="report-foot">Reporte generado por IKER STUDIO · Sistema desarrollado por LillyTech · 3RS Integrated Solutions</div>
+</section>
 </body></html>
