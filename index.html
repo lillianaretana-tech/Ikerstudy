@@ -13,8 +13,12 @@
 <link rel="apple-touch-icon" href="iker-apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="iker-icon-192.png">
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{syncClientsFromAppointments();fillAppointmentSelectors();updateClientSuggestions();fillJobClientOptions();renderAppointments();renderClients();renderCombos()},700)});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js">
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{syncClientsFromAppointments();fillAppointmentSelectors();updateClientSuggestions();fillJobClientOptions();renderAppointments();renderClients();renderCombos()},700)});
+</script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -233,8 +237,11 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 </div>
 <div class="tabs" id="tabs">
 <button class="tab active" data-view="resumen" onclick="show('resumen',this)">Resumen</button>
+<button class="tab" data-view="citas" onclick="show('citas',this)">Citas</button>
+<button class="tab" data-view="clientes" onclick="show('clientes',this)">Clientes</button>
 <button class="tab" data-view="registro" onclick="show('registro',this)">Nuevo trabajo</button>
-<button class="tab ownerTab" data-view="equipo" onclick="show('equipo',this)">Equipo</button>
+<button class="tab ownerTab" data-view="combos" onclick="show('combos',this)">Combos</button>
+<button class="tab ownerTab" data-view="equipo" onclick="show('equipo',this)">Profesionales</button>
 <button class="tab" data-view="historial" onclick="show('historial',this)">Historial</button>
 <button class="tab ownerTab" data-view="inventario" onclick="show('inventario',this)">Inventario</button>
 <button class="tab ownerTab" data-view="gastos" onclick="show('gastos',this)">Gastos</button>
@@ -251,12 +258,94 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 <div class="panel"><h3>Producción de hoy</h3><div id="todayWorkers" class="empty">Sin trabajos registrados hoy.</div></div>
 </section>
 
+
+
+<section id="clientes" class="view">
+<div class="sectionTitle"><h2>Clientes</h2><button class="primary" type="button" onclick="newClient()">+ Nuevo cliente</button></div>
+<div class="panel">
+ <div class="grid">
+  <label>Buscar cliente<input id="clientSearch" placeholder="Nombre, apodo o teléfono" oninput="renderClients()"></label>
+ </div>
+ <div id="clientList"></div>
+</div>
+<div id="clientForm" class="panel hide">
+ <h3 id="clientFormTitle">Nuevo cliente</h3>
+ <input id="clientId" type="hidden">
+ <div class="grid">
+  <label>Nombre / apodo<input id="clientName" placeholder="Nombre o apodo"></label>
+  <label>Teléfono / WhatsApp<input id="clientPhone" type="tel" placeholder="Ej. 8888-8888"></label>
+ </div>
+ <label style="display:block;margin-top:12px">Notas<input id="clientNotes" placeholder="Preferencias, observaciones, etc."></label>
+ <button class="primary" type="button" onclick="saveClient()">Guardar cliente</button>
+</div>
+</section>
+
+<section id="citas" class="view">
+<div class="sectionTitle"><h2>Citas</h2><button class="primary" type="button" onclick="toggle('appointmentForm')">+ Nueva cita</button></div>
+<div class="cards" style="margin-bottom:16px">
+ <div class="card"><div class="label">Citas hoy</div><div class="value" id="apptTodayCount">0</div></div>
+ <div class="card"><div class="label">Confirmadas</div><div class="value" id="apptConfirmedCount">0</div></div>
+ <div class="card"><div class="label">Pendientes</div><div class="value" id="apptPendingCount">0</div></div>
+ <div class="card"><div class="label">No se presentó</div><div class="value" id="apptNoShowCount">0</div></div>
+</div>
+<div id="appointmentForm" class="panel hide">
+ <h3 id="appointmentFormTitle">Nueva cita</h3><input id="apptEditId" type="hidden">
+ <div class="grid">
+  <label>Cliente / apodo<input id="apptClient" list="clientSuggestions" placeholder="Nombre o apodo" oninput="appointmentClientChanged()"><datalist id="clientSuggestions"></datalist></label>
+  <label>Teléfono / WhatsApp<input id="apptPhone" type="tel" placeholder="Ej. 8888-8888"></label>
+  <label>Profesional<select id="apptWorker"></select></label>
+  <label>Grupo de servicio<select id="apptServiceGroup" onchange="fillAppointmentServiceOptions()">
+<option value="">Todos</option><option value="masculino">Masculino</option><option value="femenino">Femenino</option><option value="unisex">Unisex</option>
+</select></label>
+<label>Servicio / combo<select id="apptService" onchange="appointmentSelectionChanged()"></select></label>
+  <label>Precio especial ₡<input id="apptSpecialPrice" type="number" min="0" step="500" placeholder="Opcional"></label>
+  <label>Motivo precio especial<select id="apptSpecialReason"><option value="">No aplica</option><option>Promoción</option><option>Cliente frecuente</option><option>Cortesía</option><option>Ajuste</option><option>Otro</option></select></label>
+  <label>Fecha<input id="apptDate" type="date"></label>
+  <label>Hora<input id="apptTime" type="time"></label>
+  <label>Duración estimada (min)<input id="apptDuration" type="number" min="15" step="15" value="60"></label>
+  <label>Precio estimado ₡<input id="apptPrice" type="number" min="0" step="500"></label>
+ </div>
+ <label style="display:block;margin-top:12px">Observaciones<input id="apptNotes" placeholder="Color, referencia, indicaciones, etc."></label>
+ <button class="primary" type="button" onclick="saveAppointment()">Guardar cita</button>
+</div>
+
+<div class="panel">
+ <div class="sectionTitle"><div><h3 style="margin:0">Agenda</h3><div class="small">Control diario y semanal por profesional</div></div></div>
+ <div class="biz-tools">
+  <label>Vista<select id="apptView" onchange="renderAppointments()"><option value="today">Hoy</option><option value="week">Esta semana</option><option value="all">Próximas</option></select></label>
+  <label>Profesional<select id="apptWorkerFilter" onchange="renderAppointments()"><option value="">Todos</option></select></label>
+ </div>
+ <div id="appointmentList"></div>
+</div>
+
+<div class="panel">
+ <div class="sectionTitle"><div><h3 style="margin:0">Bloqueos de agenda</h3><div class="small">Permisos, almuerzo, capacitación u otro período no disponible</div></div>
+ <button class="secondary" type="button" onclick="toggle('blockForm')">+ Bloquear horario</button></div>
+ <div id="blockForm" class="grid hide" style="margin-top:12px">
+  <label>Profesional<select id="blockWorker"></select></label>
+  <label>Fecha<input id="blockDate" type="date"></label>
+  <label>Desde<input id="blockFrom" type="time"></label>
+  <label>Hasta<input id="blockTo" type="time"></label>
+  <label style="grid-column:1/-1">Motivo<input id="blockReason" placeholder="Ej. Almuerzo / permiso"></label>
+  <button class="primary" type="button" onclick="saveScheduleBlock()">Guardar bloqueo</button>
+ </div>
+ <div id="blockList"></div>
+</div>
+</section>
+
 <section id="registro" class="view">
 <div class="panel"><h3>Registrar trabajo</h3>
  <div class="grid">
   <label>Profesional<select id="jobWorker"></select></label>
-  <label>Cliente (opcional)<input id="jobClient" placeholder="Nombre del cliente"></label>
-  <label>Servicio<select id="jobService" onchange="serviceChanged()"></select></label>
+  <label>Cliente (opcional)
+<select id="jobClient">
+<option value="">Cliente de paso / sin registrar</option>
+</select>
+</label>
+  <label>Grupo de servicio<select id="jobServiceGroup" onchange="fillJobServiceOptions()">
+<option value="">Todos</option><option value="masculino">Masculino</option><option value="femenino">Femenino</option><option value="unisex">Unisex</option>
+</select></label>
+<label>Servicio<select id="jobService" onchange="serviceChanged()"></select></label>
   <label>Monto cobrado ₡<input id="jobAmount" type="number" min="0" step="100" placeholder="0"></label>
  </div>
  <div style="margin-top:14px"><label>Forma de pago</label><div class="pay"><button id="payCash" class="on" onclick="setPay('cash')">Efectivo</button><button id="paySinpe" onclick="setPay('sinpe')">SINPE</button></div></div>
@@ -265,27 +354,44 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 </div>
 </section>
 
-<section id="equipo" class="view">
-<div class="sectionTitle"><h2>Equipo</h2></div>
-<div class="panel"><h3>Personas con acceso a Beauty</h3><div id="teamList"></div>
-<p class="note">Iker es propietario. Los colaboradores conservan su historial aunque luego se desactive su acceso.</p></div>
-<div class="panel"><h3>Agregar persona</h3>
+
+<section id="combos" class="view">
+<div class="sectionTitle"><h2>Combos y precios especiales</h2><button class="primary" type="button" onclick="toggle('comboForm')">+ Nuevo combo</button></div>
+<div id="comboForm" class="panel hide">
+ <h3>Crear combo</h3>
  <div class="grid">
-  <label>Nombre completo<input id="teamName" placeholder="Ej. Yadira"></label>
-  <label>Correo<input id="teamEmail" type="email" placeholder="correo@ejemplo.com"></label>
-  <label>Rol<select id="teamRole"><option value="worker">Profesional</option><option value="admin">Administradora</option></select></label>
-  <label>Contraseña temporal<input id="teamPassword" type="password" minlength="8" placeholder="Mínimo 8 caracteres"></label>
+  <label>Nombre del combo<input id="comboName" placeholder="Ej. Corte + barba"></label>
+  <label>Grupo<select id="comboGroup"><option value="masculino">Masculino</option><option value="femenino">Femenino</option><option value="unisex">Unisex</option></select></label>
+  <label>Precio del combo ₡<input id="comboPrice" type="number" min="0" step="500"></label>
  </div>
- <p class="note">La persona podrá entrar con este correo y contraseña. Si una persona olvida su contraseña, el propietario o una administradora puede asignarle una contraseña temporal nueva desde Equipo.</p>
- <button class="primary" onclick="addTeamMember()">Crear acceso</button>
+ <label style="display:block;margin-top:12px">Servicios incluidos</label>
+ <div id="comboServiceChecks" class="panel" style="margin-top:6px;padding:10px"></div>
+ <div class="note" style="margin-top:10px"><b>Comisión fija: 50%.</b> Tanto los servicios individuales como los combos pagan 50% al profesional sobre el precio realmente cobrado.</div>
+ <button class="primary" type="button" onclick="saveCombo()">Guardar combo</button>
 </div>
+<div class="panel"><h3>Clasificar servicios</h3><div class="small" style="margin-bottom:10px">Asigne cada servicio a Masculino, Femenino o Unisex.</div><div id="serviceGroupManager"></div></div>
+<div class="panel"><h3>Combos activos</h3><div id="comboList"></div></div>
+</section>
+
+<section id="equipo" class="view">
+<div class="sectionTitle"><h2>Profesionales</h2></div>
+<div class="panel">
+ <h3>Profesionales del salón</h3>
+ <p class="note"><b>Solo se registra nombre o apodo.</b> El profesional no recibe usuario, correo ni contraseña y no tiene acceso al sistema. Se registra únicamente para asignarle trabajos, citas y controlar su comisión del 50%.</p>
+ <div class="grid" style="margin-top:14px">
+  <label>Nombre o apodo<input id="professionalName" placeholder="Ej. Andrea"></label>
+<label>WhatsApp del profesional<input id="professionalPhone" inputmode="tel" placeholder="Ej. 8888 8888"></label>
+ </div>
+ <button class="primary" id="professionalSaveBtn" type="button" onclick="addProfessional()">Agregar profesional</button>
+</div>
+<div class="panel"><h3>Profesionales registrados</h3><div id="professionalList"></div></div>
 <div class="panel"><h3>Servicios y comisión</h3>
  <div id="servicesList"></div>
  <div class="grid" style="margin-top:14px">
   <label>Nuevo servicio<input id="newServiceName" placeholder="Ej. Nanoplastia"></label>
-  <label>Comisión<select id="newServiceRate"><option value="40">40%</option><option value="50">50%</option></select></label>
+  <label>Comisión<input value="50%" disabled></label>
  </div>
- <button class="primary" onclick="addService()">Agregar servicio</button>
+ <input id="newServiceRate" type="hidden" value="50"><button class="primary" onclick="addService()">Agregar servicio</button>
 </div>
 </section>
 
@@ -310,6 +416,18 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 
 <section id="inventario" class="view">
 <div class="sectionTitle"><h2>Inventario</h2><button class="secondary" onclick="toggle('inventoryForm')">+ Producto</button></div>
+<div class="panel">
+ <h3>Carga y conteo de inventario</h3>
+ <div class="actions" style="gap:10px;flex-wrap:wrap">
+  <button class="secondary" type="button" onclick="document.getElementById('inventoryImportFile').click()">📄 Importar lista</button>
+  <button class="secondary" type="button" onclick="document.getElementById('inventoryPhotos').click()">📸 Conteo con fotos</button>
+ </div>
+ <input id="inventoryImportFile" type="file" accept=".csv,text/csv" style="display:none">
+ <input id="inventoryPhotos" type="file" accept="image/*" capture="environment" multiple style="display:none">
+ <div class="small" style="margin-top:10px">La lista CSV puede incluir: producto, categoría, tipo, unidad, cantidad, mínimo y costo. Las fotos se pueden tomar o seleccionar en grupo.</div>
+ <div id="inventoryImportPreview" style="margin-top:12px"></div>
+ <div id="inventoryPhotoPreview" style="margin-top:12px"></div>
+</div>
 <div class="cards" style="margin-bottom:16px">
  <div class="card"><div class="label">Productos activos</div><div class="value" id="invProducts">0</div></div>
  <div class="card"><div class="label">Por reponer</div><div class="value" id="invLow">0</div></div>
@@ -364,6 +482,22 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
  <div class="card" style="grid-column:1/-1"><div class="label">Resultado del negocio</div><div class="value" id="monthNet">₡0</div><div class="small">Ventas − comisiones − gastos</div></div>
 </div>
 <div class="panel"><h3>Producción por profesional · período</h3><div id="monthWorkers"></div></div>
+
+<div class="panel" id="weeklyClosePanel">
+ <div class="sectionTitle" style="margin-bottom:8px">
+  <div><h3 style="margin:0">Cierre semanal</h3><div class="small" id="weeklyCloseDates">Semana lunes a domingo</div></div>
+  <button class="primary" id="btnWeeklyClose" type="button">Preparar cierre</button>
+ </div>
+ <div class="cards" style="margin:12px 0">
+  <div class="card"><div class="label">Ventas semana</div><div class="value" id="weeklySales">₡0</div></div>
+  <div class="card"><div class="label">Comisiones</div><div class="value" id="weeklyComms">₡0</div></div>
+  <div class="card"><div class="label">Para el salón</div><div class="value" id="weeklySalon">₡0</div></div>
+  <div class="card"><div class="label">Trabajos</div><div class="value" id="weeklyJobs">0</div></div>
+ </div>
+ <div class="note" id="weeklyCloseStatus">El cierre corresponde a la semana de lunes a domingo.</div>
+ <h3 style="margin-top:16px">Resumen por profesional</h3>
+ <div id="weeklyWorkers"></div>
+</div>
 </section>
 <div class="v2-footer">IKER STUDIO &nbsp;|&nbsp; BELLEZA · ESTILO · CONFIANZA<br><span style="font-family:Georgia,serif;font-style:italic;letter-spacing:0;font-size:13px">Más que un salón, una experiencia</span></div>
 </main>
@@ -375,6 +509,33 @@ const SUPABASE_URL='https://mzsxdobicqmbnajqpbfe.supabase.co';
 const SUPABASE_KEY='sb_publishable_ekWbZ5tswWwlGXW5DeP-uA_9yMDXwk4';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], inventoryMovements=[], expenses=[], payMethod='cash';
+let serviceGroups=JSON.parse(localStorage.getItem('ikerServiceGroups')||'{}');
+let professionals=JSON.parse(localStorage.getItem('ikerProfessionals')||'[]');
+let localProfessionalJobs=JSON.parse(localStorage.getItem('ikerProfessionalJobs')||'[]');
+
+function migrateProfessionalIdsToUUID(){
+ let changed=false;
+ professionals.forEach(p=>{
+   if(/^p\d+$/.test(String(p.id||''))){
+     const old=String(p.id), neu=crypto.randomUUID();
+     p.id=neu;
+     appointments.forEach(a=>{if(String(a.worker_id)===old)a.worker_id=neu});
+     scheduleBlocks.forEach(b=>{if(String(b.worker_id)===old)b.worker_id=neu});
+     changed=true;
+   }
+ });
+ if(changed){
+   localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
+   localStorage.setItem('ikerAppointments',JSON.stringify(appointments));
+   localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));
+ }
+}
+
+let clients=JSON.parse(localStorage.getItem('ikerClients')||'[]');
+let deletedClientKeys=JSON.parse(localStorage.getItem('ikerDeletedClientKeys')||'[]');
+let combos=JSON.parse(localStorage.getItem('ikerCombos')||'[]');
+let appointments=JSON.parse(localStorage.getItem('ikerAppointments')||'[]');
+let scheduleBlocks=JSON.parse(localStorage.getItem('ikerScheduleBlocks')||'[]');
 
 const money=n=>'₡'+Math.round(Number(n||0)).toLocaleString('es-CR');
 const localDate=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
@@ -383,7 +544,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 function loading(v){document.getElementById('loading').style.display=v?'grid':'none'}
 function toast(t){const x=document.getElementById('toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',2600)}
 function toggle(id){document.getElementById(id).classList.toggle('hide')}
-function show(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory()}
+function show(id,btn){if(id==='equipo')setTimeout(()=>{renderProfessionals();fillProfessionalSelectors()},0);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory();if(id==='citas')renderAppointments();if(id==='clientes')renderClients();if(id==='combos')renderCombos()}
 function setPay(m){payMethod=m;payCash.classList.toggle('on',m==='cash');paySinpe.classList.toggle('on',m==='sinpe')}
 function isAdmin(){return ['owner','admin'].includes(role)}
 
@@ -396,6 +557,7 @@ async function login(){
 async function logout(){await sb.auth.signOut();location.reload()}
 
 async function boot(s){
+ migrateProfessionalIdsToUUID();
  session=s; loading(true);
  const uid=s.user.id;
  const [{data:p},{data:a,error:ae}]=await Promise.all([
@@ -408,7 +570,14 @@ async function boot(s){
  hello.textContent='Hola, '+(profile.full_name||'').split(' ')[0]+'.';
  avatar.textContent=(profile.full_name||'I').charAt(0).toUpperCase();
  if(!isAdmin()) document.querySelectorAll('.ownerTab').forEach(x=>x.classList.add('hide'));
- await loadAll(); loading(false);
+ try{
+   await loadAll();
+ }catch(e){
+   console.error('IKER Studio:',e);
+   toast('La aplicación cargó, pero una sección presentó un error.');
+ }finally{
+   loading(false);
+ }
 }
 async function loadAll(){
  const uid=session.user.id;
@@ -433,37 +602,113 @@ async function loadAll(){
  }else{
    team=[{user_id:uid,role,active:true,profile}];
  }
- renderAll();
+ jobs=[...jobs,...localProfessionalJobs.filter(l=>!jobs.some(j=>String(j.id)===String(l.id)))];renderAll();
 }
 function renderAll(){
- jobService.innerHTML='<option value="">Seleccione servicio</option>'+services.map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.commission_rate}%</option>`).join('');
- const workers=team.filter(x=>x.active&&['admin','worker'].includes(x.role));
- jobWorker.innerHTML=workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Usuario')}</option>`).join('');
- if(!isAdmin()) jobWorker.value=session.user.id;
- renderDashboard(); renderTeam(); renderInventory(); renderExpenses(); renderBusiness(); renderHistory();
+ fillJobServiceOptions();
+ fillProfessionalSelectors();
+ renderDashboard();
+ renderTeam();
+ renderInventory();
+ renderExpenses();
+ renderBusiness();
+ renderHistory();
+ renderProfessionals();
+ fillProfessionalSelectors();
+ fillJobClientOptions();
 }
-function workerName(id){return team.find(x=>x.user_id===id)?.profile?.full_name||'Profesional'}
+function workerName(id){return professionalName(id)}
 function serviceName(id){return services.find(x=>x.id===id)?.name||'Servicio'}
 function renderDashboard(){
  const d=localDate(), todays=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
- const sales=todays.reduce((s,j)=>s+Number(j.amount),0), cash=todays.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0), sinpe=sales-cash, comm=todays.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
+ const sales=todays.reduce((s,j)=>s+Number(j.amount),0), cash=todays.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0), sinpe=sales-cash, comm=todays.reduce((s,j)=>s+Number(j.amount)*0.50,0);
  salesToday.textContent=money(sales);cashToday.textContent=money(cash);sinpeToday.textContent=money(sinpe);commToday.textContent=money(comm);
- const by={};todays.forEach(j=>{by[j.worker_id]??={sales:0,comm:0,count:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100;by[j.worker_id].count++});
+ const by={};todays.forEach(j=>{by[j.worker_id]??={sales:0,comm:0,count:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*0.50;by[j.worker_id].count++});
  todayWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><div><b>${esc(workerName(id))}</b><div class="small">${x.count} trabajo(s)</div></div><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
 }
-function serviceChanged(){const s=services.find(x=>x.id===jobService.value);commissionHint.textContent=s?`Este servicio paga ${s.commission_rate}% de comisión al profesional.`:'Seleccione un servicio para ver la comisión.'}
+function serviceChanged(){const s=services.find(x=>x.id===jobService.value);commissionHint.textContent=s?`Este servicio paga 50% de comisión al profesional.`:'Seleccione un servicio para ver la comisión.'}
+
+async function openProfessionalJobWhatsApp(professional,service,amount,client,payment){
+ if(!professional?.phone){
+ toast('Este profesional no tiene WhatsApp registrado. Edite su ficha y agregue el celular.');
+ return false;
+}
+ let n=normalizePhone(professional.phone);if(n.length===8)n='506'+n;
+ const commission=Number(amount||0)*0.50;
+ const now=new Date();
+ const fecha=now.toLocaleDateString('es-CR');
+ const hora=now.toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
+
+ // Comprobante visual en PNG, listo para compartir por WhatsApp.
+ const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;
+ const c=canvas.getContext('2d');
+ c.fillStyle='#fffaf7';c.fillRect(0,0,1080,1350);
+ c.fillStyle='#7b3437';c.font='bold 58px Georgia';c.textAlign='center';c.fillText('IKER STUDIO',540,115);
+ c.fillStyle='#a66d3f';c.font='30px Arial';c.fillText('COMPROBANTE DE SERVICIO',540,170);
+ c.strokeStyle='#d8b6a5';c.lineWidth=3;c.beginPath();c.moveTo(90,215);c.lineTo(990,215);c.stroke();
+ c.textAlign='left';c.fillStyle='#3b2b2b';c.font='32px Arial';
+ const rows=[
+   ['Profesional',professional.name],
+   ['Fecha',`${fecha} · ${hora}`],
+   ['Servicio',service.name],
+   ['Cliente',client||'Cliente de paso / sin registrar'],
+   ['Monto cobrado',money(amount)],
+   ['Comisión profesional (50%)',money(commission)],
+   ['Forma de pago',payment==='cash'?'Efectivo':'SINPE']
+ ];
+ let y=300;
+ rows.forEach(([k,v])=>{c.fillStyle='#765b55';c.font='27px Arial';c.fillText(k,100,y);c.fillStyle='#241b1b';c.font='bold 34px Arial';c.fillText(String(v),100,y+45);y+=125;});
+ c.strokeStyle='#d8b6a5';c.beginPath();c.moveTo(90,1135);c.lineTo(990,1135);c.stroke();
+ c.textAlign='center';c.fillStyle='#7b3437';c.font='italic 28px Georgia';c.fillText('Belleza · Estilo · Confianza',540,1200);
+ c.fillStyle='#765b55';c.font='24px Arial';c.fillText('Registro realizado por Yadira',540,1250);
+
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+ const file=new File([blob],`IKER_Studio_${professional.name.replace(/\s+/g,'_')}_${Date.now()}.png`,{type:'image/png'});
+ const msg=`Hola ${professional.name}. Te comparto el comprobante del servicio registrado en IKER Studio.`;
+
+ // En móviles compatibles, abre el menú de compartir con la imagen adjunta.
+ if(navigator.canShare && navigator.canShare({files:[file]})){
+   try{await navigator.share({files:[file],text:msg,title:'IKER Studio'});return true}catch(e){if(e.name!=='AbortError')console.warn(e)}
+ }
+ // Respaldo para PC: descarga la imagen y abre el chat de WhatsApp.
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=file.name;a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),30000);
+ window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg+' La imagen del comprobante quedó descargada para adjuntarla.')}`,'_blank');
+ return true;
+}
+
 async function saveJob(){
- const s=services.find(x=>x.id===jobService.value), amount=Number(jobAmount.value);
- if(!jobWorker.value||!s||!(amount>0)){toast('Complete profesional, servicio y monto.');return}
- loading(true);
- const {error}=await sb.from('beauty_jobs').insert({worker_id:jobWorker.value,client_name:jobClient.value.trim()||null,service_id:s.id,description:s.name,amount,commission_rate:s.commission_rate,payment_method:payMethod,created_by:session.user.id});
- loading(false);if(error){toast('No se pudo guardar: '+error.message);return}
- jobClient.value='';jobAmount.value='';toast('Trabajo registrado correctamente.');await loadAll();show('resumen',document.querySelector('[data-view="resumen"]'));
+ const workerId=jobWorker.value, serviceId=jobService.value, amount=Number(jobAmount.value||0);
+ const payMethod=document.querySelector('input[name="payMethod"]:checked')?.value||'cash';
+ if(!workerId||!serviceId||amount<=0){toast('Complete profesional, servicio y monto.');return}
+ const prof=professionals.find(p=>String(p.id)===String(workerId));
+ const s=services.find(x=>String(x.id)===String(serviceId));
+ if(!prof){toast('Seleccione un profesional registrado.');return}
+ if(!s){toast('Seleccione un servicio.');return}
+ const client=jobClient.value||'';
+ const row={
+   id:crypto.randomUUID(),
+   worker_id:workerId,
+   service_id:serviceId,
+   client_name:client,
+   amount,
+   payment_method:payMethod,
+   commission_rate:50,
+   performed_at:new Date().toISOString(),
+   professional_name:prof.name,
+   service_name:s.name
+ };
+ localProfessionalJobs.push(row);
+ localStorage.setItem('ikerProfessionalJobs',JSON.stringify(localProfessionalJobs));
+ const opened=await openProfessionalJobWhatsApp(prof,s,amount,client,payMethod);
+ jobClient.value='';jobAmount.value='';
+ toast(opened?'Trabajo registrado. Comprobante en imagen preparado para WhatsApp.':'Trabajo registrado. El profesional no tiene WhatsApp registrado.');
+ await loadAll();show('resumen',document.querySelector('[data-view="resumen"]'));
 }
 function renderTeam(){
  if(!isAdmin())return;
  teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary" onclick="resetTeamPassword('${x.user_id}','${x.profile?.full_name?esc(x.profile.full_name).replace(/'/g,'&#39;'):'Usuario'}')">Nueva contraseña</button><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
- servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div style="display:flex;gap:8px;align-items:center"><select style="width:auto;margin:0;padding:7px" onchange="updateServiceRate('${s.id}',this.value)"><option value="40" ${Number(s.commission_rate)===40?'selected':''}>40%</option><option value="50" ${Number(s.commission_rate)===50?'selected':''}>50%</option></select><button class="secondary" onclick="toggleService('${s.id}',false)">Desactivar</button></div></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
+ servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div style="display:flex;gap:8px;align-items:center"><span class="pill">50%</span><button class="secondary" onclick="toggleService('${s.id}',false)">Desactivar</button></div></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
 }
 async function beautyUserAction(payload){
  loading(true);
@@ -545,7 +790,7 @@ function renderHistory(){
  historyCount.textContent=list.length;historySales.textContent=money(sales);historyComms.textContent=money(comms);historyAvg.textContent=money(list.length?sales/list.length:0);
  historyList.innerHTML=list.length?list.map(j=>{
    const d=new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR');
-   return `<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*Number(j.commission_rate)/100)} · ${j.commission_rate}%</div></div></div>`
+   return `<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*0.50)} · ${j.commission_rate}%</div></div></div>`
  }).join(''):'<div class="empty">No hay trabajos con estos filtros.</div>';
 }
 function excelSafeName(v){return String(v||'').replace(/[\\\/:*?"<>|]/g,'-').trim()}
@@ -736,7 +981,7 @@ function openHistoryReport(){
  const list=historyFiltered(), sales=list.reduce((s,j)=>s+Number(j.amount||0),0), comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
  const cash=list.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount||0),0), sinpe=sales-cash;
  const who=historyWorker.value?workerName(historyWorker.value):'Todos los profesionales';
- const rows=list.map(j=>`<tr><td>${new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR')}</td><td>${esc(workerName(j.worker_id))}</td><td>${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''}</td><td>${j.payment_method==='cash'?'Efectivo':'SINPE'}</td><td style="text-align:right">${money(j.amount)}</td><td style="text-align:right">${money(Number(j.amount)*Number(j.commission_rate)/100)}</td></tr>`).join('');
+ const rows=list.map(j=>`<tr><td>${new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR')}</td><td>${esc(workerName(j.worker_id))}</td><td>${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''}</td><td>${j.payment_method==='cash'?'Efectivo':'SINPE'}</td><td style="text-align:right">${money(j.amount)}</td><td style="text-align:right">${money(Number(j.amount)*0.50)}</td></tr>`).join('');
  historyReportPeriod.textContent=`${new Date(historyFrom.value+'T00:00:00').toLocaleDateString('es-CR')} al ${new Date(historyTo.value+'T00:00:00').toLocaleDateString('es-CR')}`;
  historyReportFilter.textContent=`${who} · ${historyPay.value?(historyPay.value==='cash'?'Efectivo':'SINPE'):'Todas las formas de pago'}`;
  hrCount.textContent=list.length;hrSales.textContent=money(sales);hrCash.textContent=money(cash);hrSinpe.textContent=money(sinpe);hrComms.textContent=money(comms);
@@ -760,6 +1005,403 @@ function renderInventory(){
    return `<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}${i.last_unit_cost?` · ${money(i.last_unit_cost)} c/u`:''}</div>${isLow?'<div class="statusLow"><b>Reponer</b></div>':''}</div><div class="right"><div class="${isLow?'statusLow':''}"><b>${esc(invQtyText(i.current_qty,i.unit))}</b></div><div class="small">Mín. ${Number(i.minimum_qty)}${i.last_unit_cost?` · Valor ${money(val)}`:''}</div><button class="secondary" style="margin-top:7px;width:auto" onclick="openInvMove('${i.id}')">Movimiento</button></div></div>`
  }).join(''):'<div class="empty">Aún no hay productos.</div>';
 }
+
+function normalizeHeader(s){
+ return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function parseCSVLine(line){
+ const out=[]; let cur='', q=false;
+ for(let i=0;i<line.length;i++){
+  const c=line[i];
+  if(c==='"'){ if(q && line[i+1]==='"'){cur+='"';i++;} else q=!q; }
+  else if((c===','||c===';')&&!q){out.push(cur.trim());cur='';}
+  else cur+=c;
+ }
+ out.push(cur.trim()); return out;
+}
+let pendingInventoryImport=[];
+document.getElementById('inventoryImportFile')?.addEventListener('change',async e=>{
+ const f=e.target.files?.[0]; if(!f)return;
+ const text=await f.text();
+ const lines=text.split(/\r?\n/).filter(x=>x.trim());
+ if(lines.length<2){toast('La lista no contiene filas para importar.');return}
+ const headers=parseCSVLine(lines[0]).map(normalizeHeader);
+ const get=(row,names)=>{for(const n of names){const i=headers.indexOf(n);if(i>=0)return row[i]??''}return''};
+ pendingInventoryImport=lines.slice(1).map(parseCSVLine).map(r=>({
+  name:get(r,['producto','nombre','product']),
+  category:get(r,['categoria','category'])||'General',
+  type:(get(r,['tipo','type'])||'salon_use').toLowerCase().includes('reventa')?'resale':'salon_use',
+  unit:get(r,['unidad','unit'])||'unidad',
+  qty:Number(String(get(r,['cantidad','existencia','qty'])).replace(',','.'))||0,
+  min:Number(String(get(r,['minimo','mínimo','min'])).replace(',','.'))||0,
+  cost:Number(String(get(r,['costo','cost'])).replace(/[₡\s.]/g,'').replace(',','.'))||0
+ })).filter(x=>x.name);
+ const box=document.getElementById('inventoryImportPreview');
+ box.innerHTML=pendingInventoryImport.length?`<div class="note"><b>${pendingInventoryImport.length} producto(s) detectados.</b> Revise la vista previa antes de cargar.</div>`+
+ pendingInventoryImport.slice(0,8).map(x=>`<div class="row"><div><b>${esc(x.name)}</b><div class="small">${esc(x.category)} · ${x.qty} ${esc(x.unit)}</div></div><div class="right">${money(x.cost)}</div></div>`).join('')+
+ (pendingInventoryImport.length>8?`<div class="small">…y ${pendingInventoryImport.length-8} más</div>`:'')+
+ `<button class="primary" type="button" onclick="confirmInventoryImport()" style="margin-top:10px">Confirmar importación</button>`:
+ '<div class="empty">No se detectaron productos válidos.</div>';
+});
+async function confirmInventoryImport(){
+ if(!pendingInventoryImport.length)return;
+ let ok=0;
+ for(const x of pendingInventoryImport){
+  const {data,error}=await sb.from('inventory_items').insert({
+   name:x.name,category:x.category,item_type:x.type,unit:x.unit,current_qty:x.qty,min_qty:x.min,unit_cost:x.cost,active:true
+  }).select().single();
+  if(!error){ok++; if(x.qty>0 && data?.id) await sb.from('inventory_movements').insert({item_id:data.id,movement_type:'initial',qty:x.qty,notes:'Carga inicial por importación'});}
+ }
+ toast(`${ok} producto(s) importados.`);
+ pendingInventoryImport=[];
+ document.getElementById('inventoryImportPreview').innerHTML='';
+ await loadData();
+}
+document.getElementById('inventoryPhotos')?.addEventListener('change',e=>{
+ const files=[...(e.target.files||[])];
+ const box=document.getElementById('inventoryPhotoPreview');
+ if(!files.length){box.innerHTML='';return}
+ const urls=files.map(f=>URL.createObjectURL(f));
+ box.innerHTML=`<div class="note"><b>${files.length} foto(s) seleccionadas.</b><br>En la versión conectada a IA, estas imágenes se analizarán para proponer producto y cantidad. Nada modificará el inventario hasta que Yadira confirme el conteo.</div>
+ <div style="display:flex;gap:8px;overflow:auto;margin-top:10px">${urls.map((u,i)=>`<img src="${u}" alt="Foto ${i+1}" style="width:105px;height:105px;object-fit:cover;border-radius:12px;border:1px solid var(--line)">`).join('')}</div>
+ <button class="primary" type="button" onclick="demoPhotoCount()" style="margin-top:10px">Analizar fotos</button>`;
+});
+function demoPhotoCount(){
+ const box=document.getElementById('inventoryPhotoPreview');
+ box.insertAdjacentHTML('beforeend',`<div class="note" style="margin-top:10px"><b>Análisis de imágenes pendiente de conexión con IA.</b><br>El flujo final mostrará aquí una tabla editable con: producto detectado, cantidad visible, existencia del sistema y diferencia. Yadira deberá confirmar antes de aplicar cualquier ajuste.</div>`);
+ toast('Fotos listas para análisis en la versión con IA.');
+}
+
+
+
+
+function normalizePhone(v){return String(v||'').replace(/\D/g,'')}
+function syncClientsFromAppointments(){
+ let changed=false;
+ appointments.forEach(a=>{
+  const ph=normalizePhone(a.phone), nm=String(a.client||'').trim();
+  if(!nm&&!ph)return;
+  const key=ph?('p:'+ph):('n:'+nm.toLowerCase());
+  if(deletedClientKeys.includes(key))return;
+  let c=clients.find(x=>(ph&&normalizePhone(x.phone)===ph)||(!ph&&String(x.name).toLowerCase()===nm.toLowerCase()));
+  if(!c){clients.push({id:'cl'+Date.now()+Math.random().toString(36).slice(2,6),name:nm||ph,phone:a.phone||'',notes:'',created_at:a.created_at||new Date().toISOString()});changed=true}
+  else{
+   if(!c.phone&&a.phone){c.phone=a.phone;changed=true}
+   if(!c.name&&nm){c.name=nm;changed=true}
+  }
+ });
+ if(changed)persistAppointments();
+}
+function updateClientSuggestions(){
+ const d=document.getElementById('clientSuggestions');if(!d)return;
+ d.innerHTML=clients.map(c=>`<option value="${esc(c.name)}">${esc(c.phone||'')}</option>`).join('');
+}
+function appointmentClientChanged(){
+ const val=document.getElementById('apptClient').value.trim().toLowerCase();
+ const c=clients.find(x=>String(x.name).trim().toLowerCase()===val);
+ if(c&&!document.getElementById('apptPhone').value)document.getElementById('apptPhone').value=c.phone||'';
+}
+function newClient(){
+ document.getElementById('clientId').value='';document.getElementById('clientName').value='';document.getElementById('clientPhone').value='';document.getElementById('clientNotes').value='';
+ document.getElementById('clientFormTitle').textContent='Nuevo cliente';document.getElementById('clientForm').classList.remove('hide');
+}
+function editClient(id){
+ const c=clients.find(x=>x.id===id);if(!c)return;
+ document.getElementById('clientId').value=c.id;document.getElementById('clientName').value=c.name||'';document.getElementById('clientPhone').value=c.phone||'';document.getElementById('clientNotes').value=c.notes||'';
+ document.getElementById('clientFormTitle').textContent='Editar cliente';document.getElementById('clientForm').classList.remove('hide');
+}
+function saveClient(){
+ const id=document.getElementById('clientId').value,name=document.getElementById('clientName').value.trim(),phone=document.getElementById('clientPhone').value.trim(),notes=document.getElementById('clientNotes').value.trim();
+ if(!name&&!phone){toast('Indique nombre/apodo o teléfono.');return}
+ if(id){const c=clients.find(x=>x.id===id);Object.assign(c,{name:name||phone,phone,notes,updated_at:new Date().toISOString()})}
+ else clients.push({id:'cl'+Date.now(),name:name||phone,phone,notes,created_at:new Date().toISOString()});
+ persistAppointments();document.getElementById('clientForm').classList.add('hide');renderClients();updateClientSuggestions();fillJobClientOptions();toast('Cliente guardado.');
+}
+
+function deleteClient(id){
+ const c=clients.find(x=>x.id===id);if(!c)return;
+ const related=appointments.filter(a=>(normalizePhone(c.phone)&&normalizePhone(a.phone)===normalizePhone(c.phone))||String(a.client||'').trim().toLowerCase()===String(c.name||'').trim().toLowerCase()).length;
+ const msg=related
+  ?`¿Eliminar a ${c.name} de la base de clientes?\n\nTiene ${related} cita(s) registrada(s). Las citas NO se eliminarán; solo se quitará su ficha de clientes.`
+  :`¿Eliminar a ${c.name} de la base de clientes?`;
+ if(!confirm(msg))return;
+ const ph=normalizePhone(c.phone), nm=String(c.name||'').trim().toLowerCase();
+ const key=ph?('p:'+ph):('n:'+nm);
+ if(key&&!deletedClientKeys.includes(key))deletedClientKeys.push(key);
+ clients=clients.filter(x=>x.id!==id);
+ persistAppointments();
+ renderClients();updateClientSuggestions();fillJobClientOptions();
+ toast('Cliente eliminado de la base.');
+}
+
+function renderClients(){
+ syncClientsFromAppointments();
+ const q=(document.getElementById('clientSearch')?.value||'').trim().toLowerCase();
+ const arr=clients.filter(c=>!q||String(c.name).toLowerCase().includes(q)||String(c.phone).includes(q)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const box=document.getElementById('clientList');if(!box)return;
+ box.innerHTML=arr.length?arr.map(c=>{
+  const hist=appointments.filter(a=>(normalizePhone(c.phone)&&normalizePhone(a.phone)===normalizePhone(c.phone))||String(a.client).toLowerCase()===String(c.name).toLowerCase());
+  return `<div class="row"><div><b>${esc(c.name)}</b><div class="small">${esc(c.phone||'Sin teléfono')} · ${hist.length} cita(s) registrada(s)${c.notes?' · '+esc(c.notes):''}</div></div><div class="right"><button class="secondary" onclick="editClient('${c.id}')">Editar</button> <button class="secondary" onclick="deleteClient('${c.id}')">Eliminar</button></div></div>`
+ }).join(''):'<div class="empty">No hay clientes registrados.</div>';
+ updateClientSuggestions();fillJobClientOptions();
+}
+function upsertClientFromAppointment(name,phone){
+ const nm=String(name||'').trim(), ph=normalizePhone(phone);
+ if(!nm&&!ph)return;
+ const key=ph?('p:'+ph):('n:'+nm.toLowerCase());
+ deletedClientKeys=deletedClientKeys.filter(k=>k!==key);
+ let c=clients.find(x=>(ph&&normalizePhone(x.phone)===ph)||String(x.name).trim().toLowerCase()===nm.toLowerCase());
+ if(c){if(phone)c.phone=phone;if(nm)c.name=nm;c.updated_at=new Date().toISOString()}
+ else clients.push({id:'cl'+Date.now(),name:nm||phone,phone:phone||'',notes:'',created_at:new Date().toISOString()});
+}
+
+
+function normalizedGroup(v){v=String(v||'').toLowerCase();return ['masculino','femenino','unisex'].includes(v)?v:'unisex'}
+function serviceGroup(s){return normalizedGroup(serviceGroups[String(s?.id)]||s?.service_group||s?.group||s?.gender_group||'unisex')}
+
+function activeProfessionals(){return professionals.filter(p=>p.active!==false)}
+function professionalName(id){
+ const p=professionals.find(x=>String(x.id)===String(id));if(p)return p.name||'Profesional';
+ const t=team.find(x=>String(x.user_id)===String(id));return t?.profile?.full_name||'Profesional';
+}
+
+function fillJobClientOptions(){
+ const el=document.getElementById('jobClient');if(!el)return;
+ const old=el.value;
+ const sorted=[...clients].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'es'));
+ el.innerHTML='<option value="">Cliente de paso / sin registrar</option>'+sorted.map(c=>`<option value="${esc(c.name||'')}">${esc(c.name||'Sin nombre')}${c.phone?' · '+esc(c.phone):''}</option>`).join('');
+ if([...el.options].some(o=>o.value===old))el.value=old;
+}
+
+function fillProfessionalSelectors(){
+ const opts='<option value="">Seleccione profesional</option>'+activeProfessionals().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+ const ids=['apptWorker','jobWorker','apptWorkerFilter','historyWorker','blockWorker'];
+ ids.forEach(id=>{const el=document.getElementById(id);if(!el)return;const old=el.value;
+   if(id==='apptWorkerFilter')el.innerHTML='<option value="">Todos los profesionales</option>'+activeProfessionals().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+   else el.innerHTML=opts;
+   if([...el.options].some(o=>o.value===old))el.value=old;
+ });
+}
+function addProfessional(){
+ const input=document.getElementById('professionalName'), phoneEl=document.getElementById('professionalPhone');if(!input)return;
+ const name=input.value.trim(), phone=normalizePhone(phoneEl?.value||'');
+ if(!name){toast('Escriba el nombre o apodo.');return}
+ if(editingProfessionalId){
+   const p=professionals.find(x=>String(x.id)===String(editingProfessionalId));
+   if(p){p.name=name;p.phone=phone}
+   editingProfessionalId=null;
+ }else{
+   professionals.push({id:crypto.randomUUID(),name,phone,active:true,created_at:new Date().toISOString()});
+ }
+ input.value='';if(phoneEl)phoneEl.value='';
+ const btn=document.getElementById('professionalSaveBtn');if(btn)btn.textContent='Agregar profesional';
+ localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
+ persistAppointments();renderProfessionals();fillProfessionalSelectors();
+ toast('Profesional guardado.');
+}
+function toggleProfessional(id){
+ const p=professionals.find(x=>x.id===id);if(!p)return;p.active=p.active===false?true:false;
+ persistAppointments();renderProfessionals();fillProfessionalSelectors();renderAppointments();
+}
+function renameProfessional(id){
+ const p=professionals.find(x=>x.id===id);if(!p)return;
+ const n=prompt('Nombre o apodo del profesional:',p.name);if(n===null)return;
+ const ph=prompt('WhatsApp del profesional:',p.phone||'');if(ph===null)return;
+ if(n.trim()){p.name=n.trim();p.phone=normalizePhone(ph);persistAppointments();renderProfessionals();fillProfessionalSelectors();renderAppointments();}
+}
+function renderProfessionals(){
+ const box=document.getElementById('professionalList');if(!box)return;
+ if(!professionals.length){
+   box.innerHTML='<div class="empty">Todavía no hay profesionales registrados en este navegador. Agregue el primero arriba.</div>';
+   return;
+ }
+ box.innerHTML=professionals.map(p=>`
+   <div class="row" style="align-items:center">
+     <div>
+       <b>${esc(p.name||'Profesional')}</b>
+       <div class="small">${p.phone?'WhatsApp: '+esc(p.phone):'<b>Sin celular registrado</b>'} · ${p.active===false?'Inactivo':'Activo'}</div>
+     </div>
+     <div class="right">
+       <button class="secondary" type="button" onclick="editProfessional('${p.id}')">✏️ Editar</button>
+       ${p.phone?`<button class="secondary" type="button" onclick="openProfessionalChat('${p.id}')">📲 WhatsApp</button>`:''}
+       <button class="secondary" type="button" onclick="toggleProfessional('${p.id}')">${p.active===false?'Reactivar':'Desactivar'}</button>
+     </div>
+   </div>`).join('');
+}
+let editingProfessionalId=null;
+function openProfessionalChat(id){
+ const p=professionals.find(x=>String(x.id)===String(id));if(!p?.phone){toast('Este profesional no tiene WhatsApp registrado.');return}
+ let n=normalizePhone(p.phone);if(n.length===8)n='506'+n;
+ window.open(`https://wa.me/${n}`,'_blank');
+}
+function editProfessional(id){
+ const p=professionals.find(x=>String(x.id)===String(id));if(!p)return;
+ editingProfessionalId=p.id;
+ const n=document.getElementById('professionalName'), ph=document.getElementById('professionalPhone');
+ if(n)n.value=p.name||'';
+ if(ph)ph.value=p.phone||'';
+ const btn=document.getElementById('professionalSaveBtn');
+ if(btn)btn.textContent='Guardar cambios';
+ window.scrollTo({top:document.getElementById('professionalName')?.getBoundingClientRect().top+window.scrollY-120,behavior:'smooth'});
+}
+
+function fillJobServiceOptions(){
+ const sel=document.getElementById('jobService');if(!sel)return;
+ const g=document.getElementById('jobServiceGroup')?.value||'';
+ const arr=services.filter(s=>!g||serviceGroup(s)===g);
+ sel.innerHTML='<option value="">Seleccione servicio</option>'+arr.map(s=>`<option value="${s.id}">${esc(s.name)} · 50%</option>`).join('');
+}
+function fillAppointmentServiceOptions(){
+ const s=document.getElementById('apptService');if(!s)return;
+ const g=document.getElementById('apptServiceGroup')?.value||'';
+ const sv=services.filter(x=>x.active!==false&&(!g||serviceGroup(x)===g));
+ const cb=combos.filter(c=>c.active!==false&&(!g||normalizedGroup(c.group)===g));
+ s.innerHTML='<option value="">Seleccione</option><optgroup label="Servicios">'+sv.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('')+'</optgroup><optgroup label="Combos">'+cb.map(c=>`<option value="combo:${c.id}">${esc(c.name)} · ${money(c.price)}</option>`).join('')+'</optgroup>';
+}
+
+function servicePrice(s){return Number(s?.price||s?.base_price||s?.amount||0)}
+function serviceRate(s){return 50}
+function renderCombos(){
+ const checks=document.getElementById('comboServiceChecks');
+ if(checks) checks.innerHTML=services.length?services.filter(s=>s.active!==false).map(s=>`<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" class="comboSvc" value="${s.id}" style="width:auto"> <span>${esc(s.name)} · ${money(servicePrice(s))} · Comisión 50%</span></label>`).join(''):'<div class="empty">Primero configure los servicios.</div>';
+ const mgr=document.getElementById('serviceGroupManager');
+ if(mgr)mgr.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div class="right"><select onchange="setServiceGroup('${s.id}',this.value)"><option value="masculino" ${serviceGroup(s)==='masculino'?'selected':''}>Masculino</option><option value="femenino" ${serviceGroup(s)==='femenino'?'selected':''}>Femenino</option><option value="unisex" ${serviceGroup(s)==='unisex'?'selected':''}>Unisex</option></select></div></div>`).join(''):'<div class="empty">No hay servicios.</div>';
+ const list=document.getElementById('comboList');
+ if(list) list.innerHTML=combos.length?combos.map(c=>{
+  const normal=c.service_ids.reduce((t,id)=>t+servicePrice(services.find(s=>String(s.id)===String(id))),0);
+  return `<div class="row"><div><b>${esc(c.name)}</b><div class="small">${normalizedGroup(c.group).charAt(0).toUpperCase()+normalizedGroup(c.group).slice(1)} · ${c.service_ids.map(id=>esc(apptServiceName(id))).join(' + ')}</div><div class="small">Precio normal ${money(normal)} · Combo ${money(c.price)}</div></div><div class="right"><button class="secondary" onclick="toggleCombo('${c.id}')">${c.active===false?'Activar':'Desactivar'}</button></div></div>`
+ }).join(''):'<div class="empty">No hay combos creados.</div>';
+}
+
+function setServiceGroup(id,g){
+ serviceGroups[String(id)]=normalizedGroup(g);persistAppointments();fillJobServiceOptions();fillAppointmentServiceOptions();renderCombos();toast('Grupo actualizado.');
+}
+
+function saveCombo(){
+ const name=document.getElementById('comboName').value.trim(), price=Number(document.getElementById('comboPrice').value||0), group=document.getElementById('comboGroup').value;
+ const ids=[...document.querySelectorAll('.comboSvc:checked')].map(x=>x.value);
+ if(!name||!price||ids.length<2){toast('Indique nombre, precio y al menos dos servicios.');return}
+ combos.push({id:'c'+Date.now(),name,price,group,service_ids:ids,active:true});
+ persistAppointments();document.getElementById('comboName').value='';document.getElementById('comboPrice').value='';document.querySelectorAll('.comboSvc').forEach(x=>x.checked=false);renderCombos();fillAppointmentSelectors();toast('Combo guardado.');
+}
+function toggleCombo(id){const c=combos.find(x=>x.id===id);if(c){c.active=c.active===false?true:false;persistAppointments();renderCombos();fillAppointmentSelectors()}}
+function comboCommission(combo,actualPrice){return Number(actualPrice||0)*0.50}
+function appointmentSelectionChanged(){
+ const v=document.getElementById('apptService')?.value||'', price=document.getElementById('apptPrice');
+ if(v.startsWith('combo:')){const c=combos.find(x=>x.id===v.slice(6));if(c&&price)price.value=c.price}
+ else {const s=services.find(x=>String(x.id)===String(v));if(s&&price&&servicePrice(s))price.value=servicePrice(s)}
+}
+
+function persistAppointments(){localStorage.setItem('ikerAppointments',JSON.stringify(appointments));localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));localStorage.setItem('ikerCombos',JSON.stringify(combos));localStorage.setItem('ikerClients',JSON.stringify(clients));localStorage.setItem('ikerDeletedClientKeys',JSON.stringify(deletedClientKeys));localStorage.setItem('ikerServiceGroups',JSON.stringify(serviceGroups));localStorage.setItem('ikerProfessionals',JSON.stringify(professionals))}
+function appointmentStatusLabel(s){return ({pending:'Pendiente',confirmed:'Confirmada',arrived:'Llegó',service:'En servicio',done:'Finalizada',cancelled:'Cancelada',noshow:'No se presentó'})[s]||s}
+function fillAppointmentSelectors(){
+ fillProfessionalSelectors();
+ const opts=activeProfessionals().map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+ const b=document.getElementById('blockWorker');if(b){const old=b.value;b.innerHTML='<option value="">Seleccione profesional</option>'+opts;if([...b.options].some(o=>o.value===old))b.value=old;}
+ fillAppointmentServiceOptions();
+ const today=localDate(); ['apptDate','blockDate'].forEach(id=>{const e=document.getElementById(id);if(e&&!e.value)e.value=today});
+}
+function apptWorkerName(id){return professionalName(id)}
+function apptServiceName(id){
+ if(String(id).startsWith('combo:')){const c=combos.find(x=>x.id===String(id).slice(6));return c?c.name:'Combo'}
+ const s=services.find(x=>String(x.id)===String(id));return s?s.name:'Servicio'
+}
+function timeToMin(t){const [h,m]=String(t||'00:00').split(':').map(Number);return h*60+m}
+function overlap(aStart,aDur,bStart,bDur){return timeToMin(aStart)<timeToMin(bStart)+Number(bDur||0)&&timeToMin(bStart)<timeToMin(aStart)+Number(aDur||0)}
+function saveAppointment(){
+ const client=document.getElementById('apptClient').value.trim(), phone=document.getElementById('apptPhone').value.trim();
+ const worker_id=document.getElementById('apptWorker').value, service_id=document.getElementById('apptService').value;
+ const date=document.getElementById('apptDate').value, time=document.getElementById('apptTime').value;
+ const duration=Number(document.getElementById('apptDuration').value||60), listPrice=Number(document.getElementById('apptPrice').value||0);
+ const specialRaw=Number(document.getElementById('apptSpecialPrice')?.value||0), special_reason=document.getElementById('apptSpecialReason')?.value||'';
+ const price=specialRaw>0?specialRaw:listPrice, special_price=specialRaw>0?specialRaw:null;
+ const notes=document.getElementById('apptNotes').value.trim();
+ if(!client||!worker_id||!date||!time){toast('Complete cliente, profesional, fecha y hora.');return}
+ const conflict=appointments.some(a=>a.worker_id===worker_id&&a.date===date&&!['cancelled','noshow'].includes(a.status)&&overlap(time,duration,a.time,a.duration));
+ const block=scheduleBlocks.some(b=>b.worker_id===worker_id&&b.date===date&&timeToMin(time)<timeToMin(b.to)&&timeToMin(b.from)<timeToMin(time)+duration);
+ if(conflict||block){
+  if(!confirm(conflict?'Ese profesional ya tiene una cita que coincide con ese horario. ¿Guardar de todas formas?':'Ese horario está bloqueado para el profesional. ¿Guardar de todas formas?'))return;
+ }
+ const editId=document.getElementById('apptEditId')?.value||'';
+ const payload={client,phone,worker_id,service_id,date,time,duration,price,list_price:listPrice,special_price,special_reason,notes};
+ if(editId){
+  const a=appointments.find(x=>x.id===editId);if(a)Object.assign(a,payload,{updated_at:new Date().toISOString()});
+ }else appointments.push({id:'a'+Date.now(),...payload,status:'pending',created_at:new Date().toISOString()});
+ upsertClientFromAppointment(client,phone);persistAppointments();
+ document.getElementById('apptEditId').value='';document.getElementById('appointmentFormTitle').textContent='Nueva cita';
+ document.getElementById('appointmentForm').classList.add('hide'); renderAppointments(); toast(editId?'Cita actualizada.':'Cita guardada.');
+}
+
+function editAppointment(id){
+ const a=appointments.find(x=>x.id===id);if(!a)return;
+ document.getElementById('apptEditId').value=a.id;
+ document.getElementById('apptClient').value=a.client||'';document.getElementById('apptPhone').value=a.phone||'';
+ document.getElementById('apptWorker').value=a.worker_id||'';
+ const sg=String(a.service_id).startsWith('combo:')?normalizedGroup(combos.find(c=>c.id===String(a.service_id).slice(6))?.group):serviceGroup(services.find(s=>String(s.id)===String(a.service_id)));
+ document.getElementById('apptServiceGroup').value=sg;fillAppointmentServiceOptions();document.getElementById('apptService').value=a.service_id||'';
+ document.getElementById('apptDate').value=a.date||'';document.getElementById('apptTime').value=a.time||'';
+ document.getElementById('apptDuration').value=a.duration||60;document.getElementById('apptPrice').value=a.list_price??a.price??'';
+ document.getElementById('apptSpecialPrice').value=a.special_price??'';document.getElementById('apptSpecialReason').value=a.special_reason||'';
+ document.getElementById('apptNotes').value=a.notes||'';
+ document.getElementById('appointmentFormTitle').textContent='Editar cita';
+ document.getElementById('appointmentForm').classList.remove('hide');window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function setAppointmentStatus(id,status){
+ const a=appointments.find(x=>x.id===id);if(!a)return;a.status=status;persistAppointments();renderAppointments();toast('Estado actualizado.');
+}
+
+function crWhatsappNumber(raw){
+ let n=String(raw||'').replace(/\D/g,'');
+ if(!n)return '';
+ if(n.length===8)n='506'+n;
+ return n;
+}
+function sendAppointmentConfirmation(id){
+ const a=appointments.find(x=>x.id===id);if(!a)return;
+ const phone=crWhatsappNumber(a.phone);
+ if(!phone){toast('Esta cita no tiene número de WhatsApp.');return}
+ const d=new Date(a.date+'T12:00:00');
+ const dateText=d.toLocaleDateString('es-CR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+ const service=apptServiceName(a.service_id), professional=apptWorkerName(a.worker_id);
+ const msg=`Hola ${a.client} 😊%0A%0ATe confirmamos tu cita en IKER STUDIO:%0A✂️ ${service}%0A👤 Profesional: ${professional}%0A📅 ${dateText}%0A🕒 ${a.time}%0A%0APor favor confírmanos que podrás asistir. ¡Te esperamos!`;
+ window.open(`https://wa.me/${phone}?text=${msg}`,'_blank');
+ a.status='confirmed';a.confirmation_sent_at=new Date().toISOString();persistAppointments();renderAppointments();
+}
+
+function appointmentToJob(id){
+ const a=appointments.find(x=>x.id===id);if(!a)return;
+ const jw=document.getElementById('jobWorker'), js=document.getElementById('jobService'), ja=document.getElementById('jobAmount');
+ if(jw)jw.value=a.worker_id;
+ if(js&&!String(a.service_id).startsWith('combo:'))js.value=a.service_id;
+ if(ja)ja.value=a.price||'';
+ const reason=document.getElementById('jobSpecialReason');if(reason&&a.special_reason)reason.value=a.special_reason;
+ a.status='service';persistAppointments();
+ const btn=[...document.querySelectorAll('.tab')].find(x=>x.dataset.view==='registro');show('registro',btn);toast(String(a.service_id).startsWith('combo:')?'Combo enviado al trabajo. Confirme los servicios y el monto final.':'Cita enviada a Nuevo trabajo.');
+}
+function renderAppointments(){
+ fillAppointmentSelectors();
+ const today=localDate(), now=new Date(), wr=weekRangeMondaySunday(now), view=document.getElementById('apptView')?.value||'today', wf=document.getElementById('apptWorkerFilter')?.value||'';
+ const todays=appointments.filter(a=>a.date===today);
+ const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+ set('apptTodayCount',todays.length);set('apptConfirmedCount',todays.filter(a=>a.status==='confirmed').length);set('apptPendingCount',todays.filter(a=>a.status==='pending').length);set('apptNoShowCount',todays.filter(a=>a.status==='noshow').length);
+ let arr=appointments.filter(a=>!wf||a.worker_id===wf).filter(a=>{
+  if(view==='today')return a.date===today;
+  if(view==='week'){const d=new Date(a.date+'T12:00:00');return d>=wr.from&&d<=wr.to}
+  return a.date>=today;
+ }).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+ const box=document.getElementById('appointmentList');
+ if(box)box.innerHTML=arr.length?arr.map(a=>`<div class="row" style="align-items:flex-start"><div><b>${esc(a.time)} · ${esc(a.client)}</b><div class="small">${esc(apptServiceName(a.service_id))} · ${esc(apptWorkerName(a.worker_id))} · ${a.duration} min${a.phone?' · '+esc(a.phone):''}</div><div class="small">${appointmentStatusLabel(a.status)}${a.special_price?' · Precio especial: '+esc(a.special_reason||'Sí'):''}${a.notes?' · '+esc(a.notes):''}</div></div><div class="right"><div class="money">${money(a.price)}</div><select onchange="setAppointmentStatus('${a.id}',this.value)" style="margin-top:5px"><option value="pending" ${a.status==='pending'?'selected':''}>Pendiente</option><option value="confirmed" ${a.status==='confirmed'?'selected':''}>Confirmada</option><option value="arrived" ${a.status==='arrived'?'selected':''}>Llegó</option><option value="service" ${a.status==='service'?'selected':''}>En servicio</option><option value="done" ${a.status==='done'?'selected':''}>Finalizada</option><option value="cancelled" ${a.status==='cancelled'?'selected':''}>Cancelada</option><option value="noshow" ${a.status==='noshow'?'selected':''}>No se presentó</option></select><br><button class="secondary" type="button" style="margin-top:6px" onclick="editAppointment('${a.id}')">✏️ Editar</button> <button class="secondary" type="button" style="margin-top:6px" onclick="sendAppointmentConfirmation('${a.id}')">📲 Confirmar por WhatsApp</button> <button class="secondary" type="button" style="margin-top:6px" onclick="appointmentToJob('${a.id}')">Registrar trabajo</button></div></div>`).join(''):'<div class="empty">No hay citas para esta vista.</div>';
+ const bl=document.getElementById('blockList');
+ if(bl)bl.innerHTML=scheduleBlocks.length?scheduleBlocks.slice().sort((a,b)=>(a.date+a.from).localeCompare(b.date+b.from)).map(b=>`<div class="row"><div><b>${esc(apptWorkerName(b.worker_id))}</b><div class="small">${esc(b.date)} · ${esc(b.from)}–${esc(b.to)} · ${esc(b.reason||'No disponible')}</div></div></div>`).join(''):'<div class="empty">Sin bloqueos registrados.</div>';
+}
+function saveScheduleBlock(){
+ const worker_id=document.getElementById('blockWorker').value,date=document.getElementById('blockDate').value,from=document.getElementById('blockFrom').value,to=document.getElementById('blockTo').value,reason=document.getElementById('blockReason').value.trim();
+ if(!worker_id||!date||!from||!to){toast('Complete profesional, fecha y horario.');return}
+ if(timeToMin(to)<=timeToMin(from)){toast('La hora final debe ser posterior a la inicial.');return}
+ scheduleBlocks.push({id:'b'+Date.now(),worker_id,date,from,to,reason});persistAppointments();document.getElementById('blockForm').classList.add('hide');renderAppointments();toast('Horario bloqueado.');
+}
+
 async function addInventory(){
  const name=invName.value.trim();if(!name)return toast('Escriba el producto.');
  const qty=Number(invQty.value||0),cost=Number(invCost.value||0);
@@ -841,14 +1483,15 @@ function renderBusiness(){
  const sales=jj.reduce((s,j)=>s+Number(j.amount),0);
  const cash=jj.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0);
  const sinpe=jj.filter(j=>j.payment_method==='sinpe').reduce((s,j)=>s+Number(j.amount),0);
- const comms=jj.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
+ const comms=jj.reduce((s,j)=>s+Number(j.amount)*0.50,0);
  const exps=ee.reduce((s,e)=>s+Number(e.amount),0);
  const afterComms=sales-comms, net=afterComms-exps;
  monthSales.textContent=money(sales);monthCash.textContent=money(cash);monthSinpe.textContent=money(sinpe);
  monthComms.textContent=money(comms);monthAfterComms.textContent=money(afterComms);
  monthExpenses.textContent=money(exps);monthNet.textContent=money(net);
- const by={};jj.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100});
+ const by={};jj.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*0.50});
  monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción en este período.</div>';
+ renderWeeklyClose();
  return {from,to,sales,cash,sinpe,comms,exps,afterComms,net,by};
 }
 
@@ -856,6 +1499,57 @@ function renderBusiness(){
  const {data}=await sb.auth.getSession();
  if(data.session) await boot(data.session);
 })();
+
+
+function weekRangeMondaySunday(base=new Date()){
+ const d=new Date(base.getFullYear(),base.getMonth(),base.getDate());
+ const offset=(d.getDay()+6)%7;
+ const from=new Date(d); from.setDate(d.getDate()-offset); from.setHours(0,0,0,0);
+ const to=new Date(from); to.setDate(from.getDate()+6); to.setHours(23,59,59,999);
+ return {from,to};
+}
+function weeklySummary(){
+ if(!isAdmin()) return null;
+ const {from,to}=weekRangeMondaySunday();
+ const jj=jobs.filter(j=>{const d=itemDate(j);return d>=from&&d<=to});
+ const by={};
+ jj.forEach(j=>{
+   const id=j.worker_id;
+   by[id]??={jobs:0,sales:0,comm:0,cash:0,sinpe:0};
+   const a=Number(j.amount||0), c=a*Number(j.commission_rate||0)/100;
+   by[id].jobs++; by[id].sales+=a; by[id].comm+=c;
+   if(j.payment_method==='cash') by[id].cash+=a;
+   if(j.payment_method==='sinpe') by[id].sinpe+=a;
+ });
+ const sales=jj.reduce((s,j)=>s+Number(j.amount||0),0);
+ const comms=jj.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
+ return {from,to,jj,by,sales,comms,salon:sales-comms};
+}
+function renderWeeklyClose(){
+ const x=weeklySummary(); if(!x) return;
+ const fmt=d=>d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
+ const el=id=>document.getElementById(id);
+ if(el('weeklyCloseDates')) el('weeklyCloseDates').textContent=`Semana: ${fmt(x.from)} al ${fmt(x.to)}`;
+ if(el('weeklySales')) el('weeklySales').textContent=money(x.sales);
+ if(el('weeklyComms')) el('weeklyComms').textContent=money(x.comms);
+ if(el('weeklySalon')) el('weeklySalon').textContent=money(x.salon);
+ if(el('weeklyJobs')) el('weeklyJobs').textContent=x.jj.length;
+ if(el('weeklyWorkers')) el('weeklyWorkers').innerHTML=Object.keys(x.by).length
+  ?Object.entries(x.by).map(([id,v])=>`<div class="row"><div><b>${esc(workerName(id))}</b><div class="small">${v.jobs} trabajo(s) · Efectivo ${money(v.cash)} · SINPE ${money(v.sinpe)}</div></div><div class="right"><div class="money">${money(v.sales)}</div><div class="small">Comisión ${money(v.comm)} · Salón ${money(v.sales-v.comm)}</div></div></div>`).join('')
+  :'<div class="empty">Sin trabajos registrados esta semana.</div>';
+ const sunday=new Date().getDay()===0;
+ if(el('weeklyCloseStatus')) el('weeklyCloseStatus').textContent=sunday
+  ?'Hoy es domingo: el cierre semanal está listo para revisión e impresión.'
+  :'Cierre oficial los domingos. Puede revisar el acumulado de la semana en cualquier momento.';
+}
+function prepareWeeklyClose(){
+ const x=weeklySummary(); if(!x) return;
+ const period=document.getElementById('bizPeriod');
+ if(period) period.value='week';
+ updateBusinessPeriod();
+ openBusinessReport();
+ toast(new Date().getDay()===0?'Cierre semanal preparado. Revise y luego imprima/guarde el reporte.':'Vista previa del cierre semanal preparada.');
+}
 
 function reportLocalDate(d){
  return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
@@ -893,10 +1587,13 @@ document.addEventListener('DOMContentLoaded',()=>{
  document.getElementById('bizFrom')?.addEventListener('change',renderBusiness);
  document.getElementById('bizTo')?.addEventListener('change',renderBusiness);
  document.getElementById('btnBusinessReport')?.addEventListener('click',openBusinessReport);
+ document.getElementById('btnWeeklyClose')?.addEventListener('click',prepareWeeklyClose);
  document.getElementById('btnCloseBusinessReport')?.addEventListener('click',closeBusinessReport);
  document.getElementById('btnPrintBusinessReport')?.addEventListener('click',()=>window.print());
 });
 
+
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{syncClientsFromAppointments();fillAppointmentSelectors();updateClientSuggestions();fillJobClientOptions();renderAppointments();renderClients();renderCombos()},700)});
 </script>
 <div id="inventoryMoveModal" class="modal">
  <div class="modalCard">
@@ -972,6 +1669,8 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.error('Service Worker:', err));
   });
 }
+
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{syncClientsFromAppointments();fillAppointmentSelectors();updateClientSuggestions();fillJobClientOptions();renderAppointments();renderClients();renderCombos()},700)});
 </script>
 
 </body></html>
