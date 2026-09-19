@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.2</title>
+<title>IKER Studio · V1.3</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
@@ -142,11 +142,16 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 </section>
 
 <section id="negocio" class="view">
+<div class="sectionTitle"><h2>Negocio</h2></div>
+<p class="muted">Resumen del mes: cuánto se vendió, cómo ingresó el dinero, cuánto corresponde al equipo y cuánto queda para el negocio.</p>
 <div class="cards">
  <div class="card"><div class="label">Ventas del mes</div><div class="value" id="monthSales">₡0</div></div>
- <div class="card"><div class="label">Comisiones</div><div class="value" id="monthComms">₡0</div></div>
+ <div class="card"><div class="label">Efectivo</div><div class="value" id="monthCash">₡0</div></div>
+ <div class="card"><div class="label">SINPE</div><div class="value" id="monthSinpe">₡0</div></div>
+ <div class="card"><div class="label">Comisiones por pagar</div><div class="value" id="monthComms">₡0</div></div>
+ <div class="card"><div class="label">Después de comisiones</div><div class="value" id="monthAfterComms">₡0</div></div>
  <div class="card"><div class="label">Gastos</div><div class="value" id="monthExpenses">₡0</div></div>
- <div class="card"><div class="label">Resultado estimado</div><div class="value" id="monthNet">₡0</div></div>
+ <div class="card" style="grid-column:1/-1"><div class="label">Resultado del negocio</div><div class="value" id="monthNet">₡0</div><div class="small">Ventas − comisiones − gastos</div></div>
 </div>
 <div class="panel"><h3>Producción por profesional · mes</h3><div id="monthWorkers"></div></div>
 </section>
@@ -220,7 +225,7 @@ async function loadAll(){
 }
 function renderAll(){
  jobService.innerHTML='<option value="">Seleccione servicio</option>'+services.map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.commission_rate}%</option>`).join('');
- const workers=team.filter(x=>x.active&&['owner','admin','worker'].includes(x.role));
+ const workers=team.filter(x=>x.active&&['admin','worker'].includes(x.role));
  jobWorker.innerHTML=workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Usuario')}</option>`).join('');
  if(!isAdmin()) jobWorker.value=session.user.id;
  renderDashboard(); renderTeam(); renderInventory(); renderExpenses(); renderBusiness(); renderHistory();
@@ -311,8 +316,15 @@ async function addExpense(){
 }
 function renderBusiness(){
  if(!isAdmin())return;
- const sales=jobs.reduce((s,j)=>s+Number(j.amount),0),comms=jobs.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0),exps=expenses.reduce((s,e)=>s+Number(e.amount),0);
- monthSales.textContent=money(sales);monthComms.textContent=money(comms);monthExpenses.textContent=money(exps);monthNet.textContent=money(sales-comms-exps);
+ const sales=jobs.reduce((s,j)=>s+Number(j.amount),0);
+ const cash=jobs.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0);
+ const sinpe=jobs.filter(j=>j.payment_method==='sinpe').reduce((s,j)=>s+Number(j.amount),0);
+ const comms=jobs.reduce((s,j)=>s+Number(j.amount)*Number(j.commission_rate)/100,0);
+ const exps=expenses.reduce((s,e)=>s+Number(e.amount),0);
+ const afterComms=sales-comms, net=afterComms-exps;
+ monthSales.textContent=money(sales);monthCash.textContent=money(cash);monthSinpe.textContent=money(sinpe);
+ monthComms.textContent=money(comms);monthAfterComms.textContent=money(afterComms);
+ monthExpenses.textContent=money(exps);monthNet.textContent=money(net);
  const by={};jobs.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*Number(j.commission_rate)/100});
  monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción este mes.</div>';
 }
