@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.5</title>
+<title>IKER Studio · V1.5.1</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
@@ -186,8 +186,10 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <div id="inventoryForm" class="panel hide"><h3>Agregar producto</h3>
  <div class="grid">
   <label>Producto<input id="invName" placeholder="Ej. Shampoo profesional"></label><label>Categoría<input id="invCategory" placeholder="Ej. Cabello"></label>
-  <label>Tipo<select id="invType"><option value="salon_use">Uso del salón</option><option value="resale">Reventa</option></select></label><label>Unidad<input id="invUnit" value="unidad"></label>
-  <label>Existencia inicial<input id="invQty" type="number" step="0.01" min="0" value="0"></label><label>Mínimo para reponer<input id="invMin" type="number" step="0.01" min="0" value="0"></label>
+  <label>Tipo<select id="invType"><option value="salon_use">Uso del salón</option><option value="resale">Reventa</option></select></label>
+  <label>Unidad de control<select id="invUnit"><option value="unidad">Unidades</option><option value="botella">Botellas</option><option value="tubo">Tubos</option><option value="frasco">Frascos</option><option value="ml">Mililitros (ml)</option><option value="g">Gramos (g)</option></select></label>
+  <label><b>¿Cuántos hay ahora?</b><input id="invQty" type="number" step="0.01" min="0" value="0"><span class="small">Existencia inicial real</span></label>
+  <label><b>¿Cuándo avisar para comprar?</b><input id="invMin" type="number" step="0.01" min="0" value="0"><span class="small">Cantidad mínima para mostrar “Reponer”</span></label>
   <label>Costo unitario aproximado ₡<input id="invCost" type="number" step="0.01" min="0" value="0"></label>
  </div><button class="primary" onclick="addInventory()">Guardar producto</button>
 </div>
@@ -373,6 +375,12 @@ function renderHistory(){
  const list=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
  historyList.innerHTML=list.length?list.map(j=>`<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${j.commission_rate}%</div></div></div>`).join(''):'<div class="empty">No hay trabajos en esta fecha.</div>';
 }
+function invQtyText(qty,unit){
+ const n=Number(qty||0);
+ const labels={unidad:['unidad','unidades'],botella:['botella','botellas'],tubo:['tubo','tubos'],frasco:['frasco','frascos'],ml:['ml','ml'],g:['g','g']};
+ const pair=labels[unit]||[unit||'unidad',unit||'unidades'];
+ return `${n} ${Math.abs(n)===1?pair[0]:pair[1]}`;
+}
 function renderInventory(){
  if(!isAdmin())return;
  const active=inventory.filter(i=>i.active!==false), low=active.filter(i=>Number(i.current_qty)<=Number(i.minimum_qty));
@@ -380,7 +388,7 @@ function renderInventory(){
  invProducts.textContent=active.length;invLow.textContent=low.length;invValue.textContent=money(value);
  inventoryList.innerHTML=active.length?active.map(i=>{
    const isLow=Number(i.current_qty)<=Number(i.minimum_qty), val=Number(i.current_qty||0)*Number(i.last_unit_cost||0);
-   return `<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}${i.last_unit_cost?` · ${money(i.last_unit_cost)} c/u`:''}</div>${isLow?'<div class="statusLow"><b>Reponer</b></div>':''}</div><div class="right"><div class="${isLow?'statusLow':''}"><b>${Number(i.current_qty)} ${esc(i.unit)}</b></div><div class="small">Mín. ${Number(i.minimum_qty)}${i.last_unit_cost?` · Valor ${money(val)}`:''}</div><button class="secondary" style="margin-top:7px;width:auto" onclick="openInvMove('${i.id}')">Movimiento</button></div></div>`
+   return `<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}${i.last_unit_cost?` · ${money(i.last_unit_cost)} c/u`:''}</div>${isLow?'<div class="statusLow"><b>Reponer</b></div>':''}</div><div class="right"><div class="${isLow?'statusLow':''}"><b>${esc(invQtyText(i.current_qty,i.unit))}</b></div><div class="small">Mín. ${Number(i.minimum_qty)}${i.last_unit_cost?` · Valor ${money(val)}`:''}</div><button class="secondary" style="margin-top:7px;width:auto" onclick="openInvMove('${i.id}')">Movimiento</button></div></div>`
  }).join(''):'<div class="empty">Aún no hay productos.</div>';
 }
 async function addInventory(){
@@ -391,11 +399,11 @@ async function addInventory(){
  if(!error&&qty>0) await sb.from('beauty_inventory_movements').insert({inventory_id:data.id,movement_type:'in',quantity:qty,unit_cost:cost||null,total_cost:cost?qty*cost:null,notes:'Existencia inicial'});
  loading(false);
  if(error)return toast('No se pudo guardar: '+error.message);
- invName.value='';invCategory.value='';invQty.value=0;invMin.value=0;invCost.value=0;toast('Producto agregado.');toggle('inventoryForm');await loadAll();
+ invName.value='';invCategory.value='';invUnit.value='unidad';invQty.value=0;invMin.value=0;invCost.value=0;toast('Producto agregado.');toggle('inventoryForm');await loadAll();
 }
 function openInvMove(id){
  const i=inventory.find(x=>x.id===id);if(!i)return;
- moveInventoryId.value=id;moveProductName.textContent=i.name;moveCurrentQty.textContent=`Existencia actual: ${Number(i.current_qty)} ${i.unit}`;
+ moveInventoryId.value=id;moveProductName.textContent=i.name;moveCurrentQty.textContent=`Existencia actual: ${invQtyText(i.current_qty,i.unit)}`;
  moveQty.value='';moveCost.value=i.last_unit_cost||'';moveNotes.value='';moveType.value='in';
  const hist=inventoryMovements.filter(m=>m.inventory_id===id).slice(0,8);
  moveHistory.innerHTML=hist.length?hist.map(m=>`<div class="row"><div><b>${m.movement_type==='in'?'Entrada':m.movement_type==='out'?'Uso / salida':'Ajuste'}</b><div class="small">${new Date(m.occurred_at).toLocaleString('es-CR')}${m.notes?' · '+esc(m.notes):''}</div></div><div class="right"><b>${Number(m.quantity)}</b>${m.unit_cost?`<div class="small">${money(m.unit_cost)} c/u</div>`:''}</div></div>`).join(''):'<div class="empty">Sin movimientos registrados.</div>';
