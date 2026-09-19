@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.4.2</title>
+<title>IKER Studio · V1.5</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
@@ -178,16 +178,20 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 
 <section id="inventario" class="view">
 <div class="sectionTitle"><h2>Inventario</h2><button class="secondary" onclick="toggle('inventoryForm')">+ Producto</button></div>
+<div class="cards" style="margin-bottom:16px">
+ <div class="card"><div class="label">Productos activos</div><div class="value" id="invProducts">0</div></div>
+ <div class="card"><div class="label">Por reponer</div><div class="value" id="invLow">0</div></div>
+ <div class="card"><div class="label">Valor aproximado</div><div class="value" id="invValue">₡0</div></div>
+</div>
 <div id="inventoryForm" class="panel hide"><h3>Agregar producto</h3>
  <div class="grid">
-  <label>Producto<input id="invName"></label><label>Categoría<input id="invCategory"></label>
-  <label>Tipo<select id="invType"><option value="salon_use">Uso del salón</option><option value="resale">Reventa</option></select></label>
-  <label>Unidad<input id="invUnit" value="unidad"></label>
-  <label>Existencia inicial<input id="invQty" type="number" step="0.01" value="0"></label>
-  <label>Mínimo<input id="invMin" type="number" step="0.01" value="0"></label>
+  <label>Producto<input id="invName" placeholder="Ej. Shampoo profesional"></label><label>Categoría<input id="invCategory" placeholder="Ej. Cabello"></label>
+  <label>Tipo<select id="invType"><option value="salon_use">Uso del salón</option><option value="resale">Reventa</option></select></label><label>Unidad<input id="invUnit" value="unidad"></label>
+  <label>Existencia inicial<input id="invQty" type="number" step="0.01" min="0" value="0"></label><label>Mínimo para reponer<input id="invMin" type="number" step="0.01" min="0" value="0"></label>
+  <label>Costo unitario aproximado ₡<input id="invCost" type="number" step="0.01" min="0" value="0"></label>
  </div><button class="primary" onclick="addInventory()">Guardar producto</button>
 </div>
-<div class="panel"><div id="inventoryList"></div></div>
+<div class="panel"><h3>Existencias</h3><div id="inventoryList"></div></div>
 </section>
 
 <section id="gastos" class="view">
@@ -235,7 +239,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const SUPABASE_URL='https://mzsxdobicqmbnajqpbfe.supabase.co';
 const SUPABASE_KEY='sb_publishable_ekWbZ5tswWwlGXW5DeP-uA_9yMDXwk4';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], expenses=[], payMethod='cash';
+let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], inventoryMovements=[], expenses=[], payMethod='cash';
 
 const money=n=>'₡'+Math.round(Number(n||0)).toLocaleString('es-CR');
 const localDate=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
@@ -280,6 +284,7 @@ async function loadAll(){
  if(isAdmin()){
   queries.push(sb.from('app_access').select('user_id,role,active').eq('app','beauty'));
   queries.push(sb.from('beauty_inventory').select('*').eq('active',true).order('name'));
+  queries.push(sb.from('beauty_inventory_movements').select('*').order('occurred_at',{ascending:false}).limit(200));
   queries.push(sb.from('beauty_expenses').select('*').gte('expense_date',monthStart()).order('expense_date',{ascending:false}));
  }
  const rs=await Promise.all(queries);
@@ -289,7 +294,7 @@ async function loadAll(){
    let profiles=[];
    if(ids.length){const pr=await sb.from('app_profiles').select('*').in('user_id',ids);profiles=pr.data||[]}
    team=accesses.map(a=>({...a,profile:profiles.find(p=>p.user_id===a.user_id)}));
-   inventory=rs[3].data||[]; expenses=rs[4].data||[];
+   inventory=rs[3].data||[]; inventoryMovements=rs[4].data||[]; expenses=rs[5].data||[];
  }else{
    team=[{user_id:uid,role,active:true,profile}];
  }
@@ -370,12 +375,48 @@ function renderHistory(){
 }
 function renderInventory(){
  if(!isAdmin())return;
- inventoryList.innerHTML=inventory.length?inventory.map(i=>`<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}</div></div><div class="right"><div class="${Number(i.current_qty)<=Number(i.minimum_qty)?'statusLow':''}">${Number(i.current_qty)} ${esc(i.unit)}</div><div class="small">Mín. ${Number(i.minimum_qty)}</div></div></div>`).join(''):'<div class="empty">Aún no hay productos.</div>';
+ const active=inventory.filter(i=>i.active!==false), low=active.filter(i=>Number(i.current_qty)<=Number(i.minimum_qty));
+ const value=active.reduce((sum,i)=>sum+Number(i.current_qty||0)*Number(i.last_unit_cost||0),0);
+ invProducts.textContent=active.length;invLow.textContent=low.length;invValue.textContent=money(value);
+ inventoryList.innerHTML=active.length?active.map(i=>{
+   const isLow=Number(i.current_qty)<=Number(i.minimum_qty), val=Number(i.current_qty||0)*Number(i.last_unit_cost||0);
+   return `<div class="row"><div><b>${esc(i.name)}</b><div class="small">${esc(i.category||'Sin categoría')} · ${i.item_type==='resale'?'Reventa':'Uso del salón'}${i.last_unit_cost?` · ${money(i.last_unit_cost)} c/u`:''}</div>${isLow?'<div class="statusLow"><b>Reponer</b></div>':''}</div><div class="right"><div class="${isLow?'statusLow':''}"><b>${Number(i.current_qty)} ${esc(i.unit)}</b></div><div class="small">Mín. ${Number(i.minimum_qty)}${i.last_unit_cost?` · Valor ${money(val)}`:''}</div><button class="secondary" style="margin-top:7px;width:auto" onclick="openInvMove('${i.id}')">Movimiento</button></div></div>`
+ }).join(''):'<div class="empty">Aún no hay productos.</div>';
 }
 async function addInventory(){
  const name=invName.value.trim();if(!name)return toast('Escriba el producto.');
- loading(true);const {error}=await sb.from('beauty_inventory').insert({name,category:invCategory.value.trim()||null,item_type:invType.value,unit:invUnit.value.trim()||'unidad',current_qty:Number(invQty.value||0),minimum_qty:Number(invMin.value||0)});loading(false);
- if(error)return toast('No se pudo guardar: '+error.message);invName.value='';invCategory.value='';toast('Producto agregado.');toggle('inventoryForm');await loadAll();
+ const qty=Number(invQty.value||0),cost=Number(invCost.value||0);
+ loading(true);
+ const {data,error}=await sb.from('beauty_inventory').insert({name,category:invCategory.value.trim()||null,item_type:invType.value,unit:invUnit.value.trim()||'unidad',current_qty:qty,minimum_qty:Number(invMin.value||0),last_unit_cost:cost||null}).select().single();
+ if(!error&&qty>0) await sb.from('beauty_inventory_movements').insert({inventory_id:data.id,movement_type:'in',quantity:qty,unit_cost:cost||null,total_cost:cost?qty*cost:null,notes:'Existencia inicial'});
+ loading(false);
+ if(error)return toast('No se pudo guardar: '+error.message);
+ invName.value='';invCategory.value='';invQty.value=0;invMin.value=0;invCost.value=0;toast('Producto agregado.');toggle('inventoryForm');await loadAll();
+}
+function openInvMove(id){
+ const i=inventory.find(x=>x.id===id);if(!i)return;
+ moveInventoryId.value=id;moveProductName.textContent=i.name;moveCurrentQty.textContent=`Existencia actual: ${Number(i.current_qty)} ${i.unit}`;
+ moveQty.value='';moveCost.value=i.last_unit_cost||'';moveNotes.value='';moveType.value='in';
+ const hist=inventoryMovements.filter(m=>m.inventory_id===id).slice(0,8);
+ moveHistory.innerHTML=hist.length?hist.map(m=>`<div class="row"><div><b>${m.movement_type==='in'?'Entrada':m.movement_type==='out'?'Uso / salida':'Ajuste'}</b><div class="small">${new Date(m.occurred_at).toLocaleString('es-CR')}${m.notes?' · '+esc(m.notes):''}</div></div><div class="right"><b>${Number(m.quantity)}</b>${m.unit_cost?`<div class="small">${money(m.unit_cost)} c/u</div>`:''}</div></div>`).join(''):'<div class="empty">Sin movimientos registrados.</div>';
+ inventoryMoveModal.classList.add('show');
+}
+function closeInvMove(){inventoryMoveModal.classList.remove('show')}
+async function saveInvMove(){
+ const id=moveInventoryId.value,i=inventory.find(x=>x.id===id);if(!i)return;
+ const type=moveType.value,qty=Number(moveQty.value),cost=Number(moveCost.value||0);
+ if(qty<0||!Number.isFinite(qty)||(type!=='adjustment'&&qty<=0))return toast('Indique una cantidad válida.');
+ const old=Number(i.current_qty||0);
+ let next=type==='in'?old+qty:type==='out'?old-qty:qty;
+ if(next<0)return toast('No hay suficiente existencia para registrar esa salida.');
+ const movementQty=type==='adjustment'?next-old:qty;
+ loading(true);
+ const up=await sb.from('beauty_inventory').update({current_qty:next,last_unit_cost:cost||i.last_unit_cost||null}).eq('id',id);
+ if(up.error){loading(false);return toast('No se pudo actualizar: '+up.error.message)}
+ const mv=await sb.from('beauty_inventory_movements').insert({inventory_id:id,movement_type:type,quantity:movementQty,unit_cost:cost||null,total_cost:cost?Math.abs(movementQty)*cost:null,notes:moveNotes.value.trim()||null});
+ loading(false);
+ if(mv.error)return toast('Existencia actualizada, pero no se pudo guardar el historial: '+mv.error.message);
+ closeInvMove();toast('Movimiento registrado.');await loadAll();
 }
 function renderExpenses(){
  if(!isAdmin())return;
@@ -464,6 +505,21 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 </script>
+<div id="inventoryMoveModal" class="modal">
+ <div class="modalCard">
+  <div class="sectionTitle"><div><h3 id="moveProductName">Movimiento</h3><div class="muted" id="moveCurrentQty"></div></div><button class="secondary" onclick="closeInvMove()">Cerrar</button></div>
+  <input type="hidden" id="moveInventoryId">
+  <div class="grid">
+   <label>Movimiento<select id="moveType"><option value="in">Entrada / compra</option><option value="out">Uso / salida</option><option value="adjustment">Ajustar existencia a...</option></select></label>
+   <label>Cantidad<input id="moveQty" type="number" step="0.01" min="0"></label>
+   <label>Costo unitario ₡ <span class="small">(opcional)</span><input id="moveCost" type="number" step="0.01" min="0"></label>
+   <label>Nota <span class="small">(opcional)</span><input id="moveNotes" placeholder="Ej. Compra proveedor / uso interno"></label>
+  </div>
+  <p class="small">Entrada suma, uso resta y ajuste establece la existencia indicada.</p>
+  <button class="primary" onclick="saveInvMove()">Guardar movimiento</button>
+  <div style="margin-top:18px"><h3>Últimos movimientos</h3><div id="moveHistory"></div></div>
+ </div>
+</div>
 <div id="reportPreviewBackdrop" style="display:none;position:fixed;inset:0;background:rgba(20,16,16,.65);z-index:9999;overflow:auto;padding:20px">
 <div style="width:min(900px,100%);margin:auto">
 <div class="no-print" style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px">
