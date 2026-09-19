@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.5.1</title>
+<title>IKER Studio · V1.9</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateBusinessPeriod(){
@@ -82,14 +82,49 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 .report-foot{margin-top:28px;font-size:11px;color:#666}
 @media print{
  body *{visibility:hidden!important}
- #businessReport,#businessReport *{visibility:visible!important}
- #businessReport{display:block!important;position:absolute;left:0;top:0;width:100%;padding:18mm;background:#fff}
+ #businessReport.report-preview-open,#businessReport.report-preview-open *,#historyReport.report-preview-open,#historyReport.report-preview-open *{visibility:visible!important}
+ #businessReport.report-preview-open,#historyReport.report-preview-open{display:block!important;position:absolute;left:0;top:0;width:100%;padding:18mm;background:#fff}
  @page{size:A4;margin:0}
 }
 
 
 #businessReport.report-preview-open{display:block!important;border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.25)}
-@media print{.no-print{display:none!important}#reportPreviewBackdrop{display:block!important;position:static!important;background:#fff!important;padding:0!important}}
+@media print{.no-print{display:none!important}#reportPreviewBackdrop{display:block!important;position:static!important;background:#fff!important;padding:0!important}#historyReportBackdrop{display:block!important;position:static!important;background:#fff!important;padding:0!important}}
+
+/* Inventario: modal compacto y centrado */
+#inventoryMoveModal{
+  position:fixed;
+  inset:0;
+  z-index:30;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(30,24,24,.48);
+  overflow:auto;
+}
+#inventoryMoveModal.show{display:flex}
+#inventoryMoveModal .modalCard{
+  width:min(680px,100%);
+  max-height:min(760px,88vh);
+  overflow:auto;
+  margin:auto;
+  padding:24px;
+  border-radius:24px;
+  background:var(--paper);
+  box-shadow:0 24px 70px rgba(30,24,24,.22);
+}
+#inventoryMoveModal .sectionTitle{align-items:flex-start;margin-bottom:16px}
+#inventoryMoveModal .sectionTitle h3{margin:0 0 4px}
+#inventoryMoveModal .grid{grid-template-columns:1fr 1fr;gap:14px}
+#inventoryMoveModal .primary{margin-top:14px}
+#inventoryMoveModal #moveHistory .row{padding:12px 0}
+@media(max-width:650px){
+  #inventoryMoveModal{padding:12px}
+  #inventoryMoveModal .modalCard{padding:18px;border-radius:20px;max-height:90vh}
+  #inventoryMoveModal .grid{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -158,7 +193,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
   <label>Rol<select id="teamRole"><option value="worker">Profesional</option><option value="admin">Administradora</option></select></label>
   <label>Contraseña temporal<input id="teamPassword" type="password" minlength="8" placeholder="Mínimo 8 caracteres"></label>
  </div>
- <p class="note">La persona podrá entrar con este correo y contraseña. Luego puede cambiar su contraseña desde Supabase Auth cuando implementemos recuperación.</p>
+ <p class="note">La persona podrá entrar con este correo y contraseña. Si una persona olvida su contraseña, el propietario o una administradora puede asignarle una contraseña temporal nueva desde Equipo.</p>
  <button class="primary" onclick="addTeamMember()">Crear acceso</button>
 </div>
 <div class="panel"><h3>Servicios y comisión</h3>
@@ -172,7 +207,21 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 </section>
 
 <section id="historial" class="view">
-<div class="sectionTitle"><h2>Historial</h2><input id="historyDate" type="date" style="width:auto;margin:0" onchange="renderHistory()"></div>
+<div class="sectionTitle"><h2>Historial</h2><button class="secondary" id="btnHistoryReport" type="button" onclick="openHistoryReport()">Ver / imprimir reporte</button></div>
+<div class="panel">
+ <div class="grid">
+  <label>Desde<input id="historyFrom" type="date" onchange="renderHistory()"></label>
+  <label>Hasta<input id="historyTo" type="date" onchange="renderHistory()"></label>
+  <label>Profesional<select id="historyWorker" onchange="renderHistory()"><option value="">Todos</option></select></label>
+  <label>Forma de pago<select id="historyPay" onchange="renderHistory()"><option value="">Todas</option><option value="cash">Efectivo</option><option value="sinpe">SINPE</option></select></label>
+ </div>
+</div>
+<div class="cards" style="margin-top:16px">
+ <div class="card"><div class="label">Trabajos</div><div class="value" id="historyCount">0</div></div>
+ <div class="card"><div class="label">Ventas</div><div class="value" id="historySales">₡0</div></div>
+ <div class="card"><div class="label">Comisiones</div><div class="value" id="historyComms">₡0</div></div>
+ <div class="card"><div class="label">Promedio por trabajo</div><div class="value" id="historyAvg">₡0</div></div>
+</div>
 <div class="panel"><div id="historyList"></div></div>
 </section>
 
@@ -281,7 +330,7 @@ async function loadAll(){
  const uid=session.user.id;
  let queries=[
   sb.from('beauty_services').select('*').eq('active',true).order('name'),
-  sb.from('beauty_jobs').select('*').gte('performed_at',monthStart()+'T00:00:00').order('performed_at',{ascending:false})
+  sb.from('beauty_jobs').select('*').order('performed_at',{ascending:false})
  ];
  if(isAdmin()){
   queries.push(sb.from('app_access').select('user_id,role,active').eq('app','beauty'));
@@ -329,7 +378,7 @@ async function saveJob(){
 }
 function renderTeam(){
  if(!isAdmin())return;
- teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
+ teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary" onclick="resetTeamPassword('${x.user_id}','${x.profile?.full_name?esc(x.profile.full_name).replace(/'/g,'&#39;'):'Usuario'}')">Nueva contraseña</button><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
  servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div style="display:flex;gap:8px;align-items:center"><select style="width:auto;margin:0;padding:7px" onchange="updateServiceRate('${s.id}',this.value)"><option value="40" ${Number(s.commission_rate)===40?'selected':''}>40%</option><option value="50" ${Number(s.commission_rate)===50?'selected':''}>50%</option></select><button class="secondary" onclick="toggleService('${s.id}',false)">Desactivar</button></div></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
 }
 async function beautyUserAction(payload){
@@ -356,6 +405,20 @@ async function setTeamActive(user_id,active){
 async function changeTeamRole(user_id,r){
  try{await beautyUserAction({action:'set_role',user_id,role:r});toast('Rol actualizado.');await loadAll()}catch(e){toast(e.message)}
 }
+async function resetTeamPassword(user_id,name){
+ const password=prompt(`Nueva contraseña temporal para ${name}:\n\nDebe tener al menos 8 caracteres.`);
+ if(password===null)return;
+ if(password.length<8){toast('La contraseña debe tener al menos 8 caracteres.');return}
+ const confirmPassword=prompt('Repita la contraseña temporal para confirmar.');
+ if(confirmPassword===null)return;
+ if(password!==confirmPassword){toast('Las contraseñas no coinciden.');return}
+ if(!confirm(`¿Asignar esta nueva contraseña temporal a ${name}?`))return;
+ try{
+   await beautyUserAction({action:'reset_password',user_id,password});
+   toast('Contraseña actualizada. Ya puede entregarle la nueva contraseña a la persona.');
+ }catch(e){toast('No se pudo cambiar: '+e.message)}
+}
+
 async function updateServiceRate(id,rate){
  loading(true);const {error}=await sb.from('beauty_services').update({commission_rate:Number(rate)}).eq('id',id);loading(false);
  if(error)return toast('No se pudo cambiar la comisión.');toast('Comisión actualizada.');await loadAll();
@@ -370,11 +433,49 @@ async function addService(){
  loading(true);const {error}=await sb.from('beauty_services').insert({name,commission_rate:rate});loading(false);
  if(error)return toast('No se pudo agregar: '+error.message);newServiceName.value='';toast('Servicio agregado.');await loadAll();
 }
-function renderHistory(){
- const d=historyDate.value||localDate(); if(!historyDate.value)historyDate.value=d;
- const list=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
- historyList.innerHTML=list.length?list.map(j=>`<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${j.commission_rate}%</div></div></div>`).join(''):'<div class="empty">No hay trabajos en esta fecha.</div>';
+function historyRangeDefaults(){
+ const today=localDate(), first=today.slice(0,7)+'-01';
+ if(!historyFrom.value)historyFrom.value=first;
+ if(!historyTo.value)historyTo.value=today;
 }
+function historyFiltered(){
+ historyRangeDefaults();
+ const from=historyFrom.value?new Date(historyFrom.value+'T00:00:00'):null;
+ const to=historyTo.value?new Date(historyTo.value+'T23:59:59'):null;
+ const worker=historyWorker.value, pay=historyPay.value;
+ return jobs.filter(j=>{
+   const d=new Date(j.performed_at||j.created_at);
+   return (!from||d>=from)&&(!to||d<=to)&&(!worker||j.worker_id===worker)&&(!pay||j.payment_method===pay);
+ });
+}
+function renderHistory(){
+ historyRangeDefaults();
+ const current=historyWorker.value;
+ const workers=team.filter(x=>x.active||jobs.some(j=>j.worker_id===x.user_id));
+ historyWorker.innerHTML='<option value="">Todos</option>'+workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Profesional')}</option>`).join('');
+ if(workers.some(w=>w.user_id===current))historyWorker.value=current;
+ if(!isAdmin()){historyWorker.value=session.user.id;historyWorker.disabled=true;btnHistoryReport.style.display='none'}
+ const list=historyFiltered();
+ const sales=list.reduce((s,j)=>s+Number(j.amount||0),0);
+ const comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
+ historyCount.textContent=list.length;historySales.textContent=money(sales);historyComms.textContent=money(comms);historyAvg.textContent=money(list.length?sales/list.length:0);
+ historyList.innerHTML=list.length?list.map(j=>{
+   const d=new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR');
+   return `<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*Number(j.commission_rate)/100)} · ${j.commission_rate}%</div></div></div>`
+ }).join(''):'<div class="empty">No hay trabajos con estos filtros.</div>';
+}
+function openHistoryReport(){
+ const list=historyFiltered(), sales=list.reduce((s,j)=>s+Number(j.amount||0),0), comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
+ const cash=list.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount||0),0), sinpe=sales-cash;
+ const who=historyWorker.value?workerName(historyWorker.value):'Todos los profesionales';
+ const rows=list.map(j=>`<tr><td>${new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR')}</td><td>${esc(workerName(j.worker_id))}</td><td>${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''}</td><td>${j.payment_method==='cash'?'Efectivo':'SINPE'}</td><td style="text-align:right">${money(j.amount)}</td><td style="text-align:right">${money(Number(j.amount)*Number(j.commission_rate)/100)}</td></tr>`).join('');
+ historyReportPeriod.textContent=`${new Date(historyFrom.value+'T00:00:00').toLocaleDateString('es-CR')} al ${new Date(historyTo.value+'T00:00:00').toLocaleDateString('es-CR')}`;
+ historyReportFilter.textContent=`${who} · ${historyPay.value?(historyPay.value==='cash'?'Efectivo':'SINPE'):'Todas las formas de pago'}`;
+ hrCount.textContent=list.length;hrSales.textContent=money(sales);hrCash.textContent=money(cash);hrSinpe.textContent=money(sinpe);hrComms.textContent=money(comms);
+ historyReportRows.innerHTML=rows||'<tr><td colspan="6">Sin trabajos en el período seleccionado.</td></tr>';
+ historyReportBackdrop.style.display='flex';
+}
+function closeHistoryReport(){historyReportBackdrop.style.display='none'}
 function invQtyText(qty,unit){
  const n=Number(qty||0);
  const labels={unidad:['unidad','unidades'],botella:['botella','botellas'],tubo:['tubo','tubos'],frasco:['frasco','frascos'],ml:['ml','ml'],g:['g','g']};
@@ -404,27 +505,43 @@ async function addInventory(){
 function openInvMove(id){
  const i=inventory.find(x=>x.id===id);if(!i)return;
  moveInventoryId.value=id;moveProductName.textContent=i.name;moveCurrentQty.textContent=`Existencia actual: ${invQtyText(i.current_qty,i.unit)}`;
- moveQty.value='';moveCost.value=i.last_unit_cost||'';moveNotes.value='';moveType.value='in';
+ moveQty.value='';moveCost.value=i.last_unit_cost||'';moveNotes.value='';moveType.value='purchase';moveCreateExpense.checked=true;toggleMoveExpense();
  const hist=inventoryMovements.filter(m=>m.inventory_id===id).slice(0,8);
- moveHistory.innerHTML=hist.length?hist.map(m=>`<div class="row"><div><b>${m.movement_type==='in'?'Entrada':m.movement_type==='out'?'Uso / salida':'Ajuste'}</b><div class="small">${new Date(m.occurred_at).toLocaleString('es-CR')}${m.notes?' · '+esc(m.notes):''}</div></div><div class="right"><b>${Number(m.quantity)}</b>${m.unit_cost?`<div class="small">${money(m.unit_cost)} c/u</div>`:''}</div></div>`).join(''):'<div class="empty">Sin movimientos registrados.</div>';
+ moveHistory.innerHTML=hist.length?hist.map(m=>`<div class="row"><div><b>${m.movement_type==='purchase'?'Entrada / compra':m.movement_type==='use'?'Uso / salida':m.movement_type==='sale'?'Venta':'Ajuste'}</b><div class="small">${new Date(m.occurred_at).toLocaleString('es-CR')}${m.notes?' · '+esc(m.notes):''}</div></div><div class="right"><b>${Number(m.quantity)}</b>${m.unit_cost?`<div class="small">${money(m.unit_cost)} c/u</div>`:''}</div></div>`).join(''):'<div class="empty">Sin movimientos registrados.</div>';
  inventoryMoveModal.classList.add('show');
 }
 function closeInvMove(){inventoryMoveModal.classList.remove('show')}
+function toggleMoveExpense(){
+ const isPurchase=moveType.value==='purchase';
+ moveExpenseBox.style.display=isPurchase?'block':'none';
+ if(!isPurchase)moveCreateExpense.checked=false;
+}
+document.addEventListener('DOMContentLoaded',()=>{
+ const mt=document.getElementById('moveType');
+ if(mt) mt.addEventListener('change',()=>{
+  if(mt.value==='purchase')document.getElementById('moveCreateExpense').checked=true;
+  toggleMoveExpense();
+ });
+});
 async function saveInvMove(){
  const id=moveInventoryId.value,i=inventory.find(x=>x.id===id);if(!i)return;
  const type=moveType.value,qty=Number(moveQty.value),cost=Number(moveCost.value||0);
  if(qty<0||!Number.isFinite(qty)||(type!=='adjustment'&&qty<=0))return toast('Indique una cantidad válida.');
  const old=Number(i.current_qty||0);
- let next=type==='in'?old+qty:type==='out'?old-qty:qty;
+ const next=type==='purchase'?old+qty:(type==='use'||type==='sale')?old-qty:qty;
  if(next<0)return toast('No hay suficiente existencia para registrar esa salida.');
- const movementQty=type==='adjustment'?next-old:qty;
  loading(true);
- const up=await sb.from('beauty_inventory').update({current_qty:next,last_unit_cost:cost||i.last_unit_cost||null}).eq('id',id);
- if(up.error){loading(false);return toast('No se pudo actualizar: '+up.error.message)}
- const mv=await sb.from('beauty_inventory_movements').insert({inventory_id:id,movement_type:type,quantity:movementQty,unit_cost:cost||null,total_cost:cost?Math.abs(movementQty)*cost:null,notes:moveNotes.value.trim()||null});
+ const {error}=await sb.rpc('beauty_record_inventory_movement',{
+   p_inventory_id:id,
+   p_movement_type:type,
+   p_quantity:qty,
+   p_unit_cost:cost||null,
+   p_notes:moveNotes.value.trim()||null,
+   p_create_expense:type==='purchase' && moveCreateExpense.checked
+ });
  loading(false);
- if(mv.error)return toast('Existencia actualizada, pero no se pudo guardar el historial: '+mv.error.message);
- closeInvMove();toast('Movimiento registrado.');await loadAll();
+ if(error)return toast('No se pudo guardar el movimiento: '+error.message);
+ closeInvMove();toast('Movimiento registrado correctamente.');await loadAll();
 }
 function renderExpenses(){
  if(!isAdmin())return;
@@ -518,12 +635,18 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="sectionTitle"><div><h3 id="moveProductName">Movimiento</h3><div class="muted" id="moveCurrentQty"></div></div><button class="secondary" onclick="closeInvMove()">Cerrar</button></div>
   <input type="hidden" id="moveInventoryId">
   <div class="grid">
-   <label>Movimiento<select id="moveType"><option value="in">Entrada / compra</option><option value="out">Uso / salida</option><option value="adjustment">Ajustar existencia a...</option></select></label>
+   <label>Movimiento<select id="moveType"><option value="purchase">Entrada / compra</option><option value="use">Uso / salida</option><option value="sale">Venta de producto</option><option value="adjustment">Ajustar existencia a...</option></select></label>
    <label>Cantidad<input id="moveQty" type="number" step="0.01" min="0"></label>
    <label>Costo unitario ₡ <span class="small">(opcional)</span><input id="moveCost" type="number" step="0.01" min="0"></label>
    <label>Nota <span class="small">(opcional)</span><input id="moveNotes" placeholder="Ej. Compra proveedor / uso interno"></label>
   </div>
   <p class="small">Entrada suma, uso resta y ajuste establece la existencia indicada.</p>
+<div id="moveExpenseBox" style="display:none;margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:#fff;">
+ <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+  <input id="moveCreateExpense" type="checkbox" checked style="width:auto;margin-top:3px;">
+  <span><b>Registrar también como gasto</b><br><span class="small">Se agregará automáticamente a Gastos en la categoría Productos.</span></span>
+ </label>
+</div>
   <button class="primary" onclick="saveInvMove()">Guardar movimiento</button>
   <div style="margin-top:18px"><h3>Últimos movimientos</h3><div id="moveHistory"></div></div>
  </div>
@@ -553,4 +676,24 @@ document.addEventListener('DOMContentLoaded',()=>{
   <div class="report-foot">Reporte generado por IKER STUDIO · Sistema desarrollado por LillyTech · 3RS Integrated Solutions</div>
 </section>
 </div></div>
+<div id="historyReportBackdrop" style="display:none;position:fixed;inset:0;background:rgba(20,16,16,.65);z-index:10000;overflow:auto;padding:20px">
+ <div style="width:min(1000px,100%);margin:auto">
+  <div class="no-print" style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px">
+   <button type="button" onclick="closeHistoryReport()">Cerrar</button>
+   <button class="primary" type="button" style="width:auto" onclick="window.print()">Imprimir / Guardar PDF</button>
+  </div>
+  <section id="historyReport" class="report-sheet report-preview-open" style="display:block">
+   <div class="report-head"><div><h1>IKER STUDIO</h1><div>REPORTE DE TRABAJOS Y PRODUCCIÓN</div></div><div style="text-align:right"><b id="historyReportPeriod"></b><br><span id="historyReportFilter"></span></div></div>
+   <div class="report-grid">
+    <div class="report-line"><span>Trabajos</span><b id="hrCount">0</b></div>
+    <div class="report-line"><span>Ventas</span><b id="hrSales">₡0</b></div>
+    <div class="report-line"><span>Efectivo</span><b id="hrCash">₡0</b></div>
+    <div class="report-line"><span>SINPE</span><b id="hrSinpe">₡0</b></div>
+    <div class="report-line"><span>Comisiones</span><b id="hrComms">₡0</b></div>
+   </div>
+   <table class="report-table"><thead><tr><th>Fecha</th><th>Profesional</th><th>Servicio / cliente</th><th>Pago</th><th style="text-align:right">Venta</th><th style="text-align:right">Comisión</th></tr></thead><tbody id="historyReportRows"></tbody></table>
+   <div class="report-foot">Reporte generado por IKER STUDIO · Sistema desarrollado por LillyTech · 3RS Integrated Solutions</div>
+  </section>
+ </div>
+</div>
 </body></html>
