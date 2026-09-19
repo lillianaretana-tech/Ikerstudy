@@ -511,7 +511,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], inventoryMovements=[], expenses=[], payMethod='cash';
 let serviceGroups=JSON.parse(localStorage.getItem('ikerServiceGroups')||'{}');
 let professionals=JSON.parse(localStorage.getItem('ikerProfessionals')||'[]');
-let localProfessionalJobs=JSON.parse(localStorage.getItem('ikerProfessionalJobs')||'[]');
+let localProfessionalJobs=[]; localStorage.setItem('ikerProfessionalJobs','[]');
 
 function migrateProfessionalIdsToUUID(){
  let changed=false;
@@ -556,7 +556,36 @@ async function login(){
 }
 async function logout(){await sb.auth.signOut();location.reload()}
 
+
+const IKER_CLEAN_START='2026-09-19T21:40:00.000Z';
+function applyCleanStart(){
+ localProfessionalJobs=[];
+ localStorage.setItem('ikerProfessionalJobs','[]');
+ if(Array.isArray(jobs)) jobs=jobs.filter(j=>{
+   const d=j.performed_at||j.created_at||j.job_date;
+   return d && new Date(d)>=new Date(IKER_CLEAN_START);
+ });
+}
+
+function cleanupPrototypeData(){
+ const clean=(arr)=>arr.filter(x=>!(x&&(
+   x.demo===true||x.sample===true||x.is_demo===true||
+   String(x.id||'').startsWith('demo-')||String(x.id||'').startsWith('sample-')
+ )));
+ professionals=clean(professionals);
+ clients=clean(clients);
+ appointments=clean(appointments);
+ scheduleBlocks=clean(scheduleBlocks);
+ localProfessionalJobs=clean(localProfessionalJobs);
+ localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
+ localStorage.setItem('ikerClients',JSON.stringify(clients));
+ localStorage.setItem('ikerAppointments',JSON.stringify(appointments));
+ localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));
+ localStorage.setItem('ikerProfessionalJobs',JSON.stringify(localProfessionalJobs));
+}
+
 async function boot(s){
+ cleanupPrototypeData();
  migrateProfessionalIdsToUUID();
  session=s; loading(true);
  const uid=s.user.id;
@@ -602,7 +631,7 @@ async function loadAll(){
  }else{
    team=[{user_id:uid,role,active:true,profile}];
  }
- jobs=[...jobs,...localProfessionalJobs.filter(l=>!jobs.some(j=>String(j.id)===String(l.id)))];renderAll();
+ jobs=[...jobs,...localProfessionalJobs.filter(l=>!jobs.some(j=>String(j.id)===String(l.id)))];applyCleanStart();renderAll();
 }
 function renderAll(){
  fillJobServiceOptions();
