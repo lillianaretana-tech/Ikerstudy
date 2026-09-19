@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.10</title>
+<title>IKER Studio · V1.11</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -432,9 +432,9 @@ function renderHistory(){
  }).join(''):'<div class="empty">No hay trabajos con estos filtros.</div>';
 }
 function excelSafeName(v){return String(v||'').replace(/[\\\/:*?"<>|]/g,'-').trim()}
-function exportHistoryExcel(){
+async function exportHistoryExcel(){
  try{
-   if(typeof XLSX==='undefined'){toast('No se pudo cargar el módulo de Excel. Revise la conexión e intente de nuevo.');return}
+   if(typeof ExcelJS==='undefined'){toast('No se pudo cargar el módulo de Excel. Revise la conexión e intente de nuevo.');return}
    const list=historyFiltered();
    const sales=list.reduce((sum,j)=>sum+Number(j.amount||0),0);
    const comms=list.reduce((sum,j)=>sum+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
@@ -443,50 +443,173 @@ function exportHistoryExcel(){
    const who=historyWorker.value?workerName(historyWorker.value):'Todos los profesionales';
    const pay=historyPay.value?(historyPay.value==='cash'?'Efectivo':'SINPE'):'Todas';
    const from=historyFrom.value||'', to=historyTo.value||'';
+   const fmtDate=v=>{
+     if(!v)return '';
+     const d=new Date(v+'T00:00:00');
+     return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'});
+   };
 
-   const summary=[
-     ['IKER STUDIO'],
-     ['Reporte de historial'],
-     [],
-     ['Desde',from],
-     ['Hasta',to],
+   const wb=new ExcelJS.Workbook();
+   wb.creator='IKER STUDIO';
+   wb.company='IKER STUDIO';
+   wb.subject='Reporte de historial';
+   wb.created=new Date();
+
+   const ink='FF201A1D', rose='FF96575A', roseLight='FFF1DEDE', cream='FFFFFAF5';
+   const gold='FFB28A57', line='FFE7DBD2', white='FFFFFFFF', muted='FF756B6E';
+   const moneyFmt='₡#,##0;[Red]-₡#,##0';
+   const thin={style:'thin',color:{argb:line}};
+   const borders={top:thin,left:thin,bottom:thin,right:thin};
+
+   // RESUMEN
+   const ws=wb.addWorksheet('Resumen',{views:[{showGridLines:false}]});
+   ws.columns=[{width:29},{width:25},{width:3},{width:18}];
+   ws.mergeCells('A1:D2');
+   const brand=ws.getCell('A1');
+   brand.value='IKER STUDIO';
+   brand.font={name:'Aptos Display',size:22,bold:true,color:{argb:white}};
+   brand.fill={type:'pattern',pattern:'solid',fgColor:{argb:ink}};
+   brand.alignment={vertical:'middle',horizontal:'left'};
+   ws.getRow(1).height=25; ws.getRow(2).height=18;
+
+   ws.mergeCells('A4:D4');
+   const title=ws.getCell('A4');
+   title.value='REPORTE DE HISTORIAL';
+   title.font={name:'Aptos',size:15,bold:true,color:{argb:rose}};
+   title.alignment={horizontal:'left'};
+
+   ws.mergeCells('A5:D5');
+   const sub=ws.getCell('A5');
+   sub.value=`Período: ${fmtDate(from)} al ${fmtDate(to)}`;
+   sub.font={name:'Aptos',size:10,color:{argb:muted}};
+
+   const filters=[
      ['Profesional',who],
      ['Forma de pago',pay],
-     [],
-     ['Trabajos',list.length],
-     ['Ventas',sales],
-     ['Efectivo',cash],
-     ['SINPE',sinpe],
-     ['Comisiones',comms],
-     ['Después de comisiones',sales-comms]
+     ['Generado',new Date().toLocaleString('es-CR')]
    ];
-   const detail=list.map(j=>{
-     const amount=Number(j.amount||0);
-     const rate=Number(j.commission_rate||0);
-     const commission=amount*rate/100;
-     return {
-       'Fecha':String(j.performed_at||j.created_at||'').slice(0,10),
-       'Profesional':workerName(j.worker_id),
-       'Cliente':j.client_name||'',
-       'Servicio':serviceName(j.service_id),
-       'Forma de pago':j.payment_method==='cash'?'Efectivo':'SINPE',
-       'Venta':amount,
-       'Comisión %':rate,
-       'Comisión':commission,
-       'Salón después de comisión':amount-commission
-     };
+   filters.forEach((r,idx)=>{
+     const row=7+idx;
+     ws.getCell(row,1).value=r[0];
+     ws.getCell(row,1).font={bold:true,color:{argb:ink}};
+     ws.getCell(row,2).value=r[1];
+     ws.mergeCells(row,2,row,4);
+     ws.getCell(row,2).font={color:{argb:muted}};
    });
 
-   const wb=XLSX.utils.book_new();
-   const wsSummary=XLSX.utils.aoa_to_sheet(summary);
-   wsSummary['!cols']=[{wch:26},{wch:28}];
-   const wsDetail=XLSX.utils.json_to_sheet(detail,{header:['Fecha','Profesional','Cliente','Servicio','Forma de pago','Venta','Comisión %','Comisión','Salón después de comisión']});
-   wsDetail['!cols']=[{wch:12},{wch:22},{wch:22},{wch:24},{wch:16},{wch:14},{wch:12},{wch:14},{wch:25}];
-   XLSX.utils.book_append_sheet(wb,wsSummary,'Resumen');
-   XLSX.utils.book_append_sheet(wb,wsDetail,'Detalle de trabajos');
-   const suffix=`${from||'inicio'}_${to||'hoy'}`;
-   XLSX.writeFile(wb,`IKER_Studio_Historial_${excelSafeName(suffix)}.xlsx`);
-   toast('Excel generado.');
+   ws.mergeCells('A11:D11');
+   ws.getCell('A11').value='RESUMEN FINANCIERO';
+   ws.getCell('A11').font={bold:true,color:{argb:white},size:11};
+   ws.getCell('A11').fill={type:'pattern',pattern:'solid',fgColor:{argb:rose}};
+   ws.getCell('A11').alignment={vertical:'middle'};
+   ws.getRow(11).height=22;
+
+   const metrics=[
+     ['Trabajos',list.length,false],
+     ['Ventas',sales,true],
+     ['Efectivo',cash,true],
+     ['SINPE',sinpe,true],
+     ['Comisiones',comms,true],
+     ['Salón después de comisiones',sales-comms,true]
+   ];
+   metrics.forEach((m,idx)=>{
+     const row=12+idx;
+     ws.getCell(row,1).value=m[0];
+     ws.mergeCells(row,1,row,2);
+     ws.getCell(row,3).value=m[1];
+     ws.mergeCells(row,3,row,4);
+     for(let c=1;c<=4;c++){
+       const cell=ws.getCell(row,c);
+       cell.border=borders;
+       cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:idx%2?cream:white}};
+     }
+     ws.getCell(row,1).font={bold:idx===1||idx===5,color:{argb:ink}};
+     ws.getCell(row,3).font={bold:true,color:{argb:idx===5?rose:ink}};
+     ws.getCell(row,3).alignment={horizontal:'right'};
+     if(m[2])ws.getCell(row,3).numFmt=moneyFmt;
+   });
+   ws.getRow(17).height=23;
+   ws.getCell('A20').value='IKER STUDIO · Reporte generado automáticamente';
+   ws.getCell('A20').font={italic:true,size:9,color:{argb:muted}};
+   ws.mergeCells('A20:D20');
+   ws.pageSetup={orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:1,paperSize:9};
+   ws.pageMargins={left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2};
+   ws.headerFooter.oddFooter='IKER STUDIO · Página &P de &N';
+
+   // DETALLE
+   const wd=wb.addWorksheet('Detalle de trabajos',{
+     views:[{state:'frozen',ySplit:5,showGridLines:false}]
+   });
+   wd.columns=[
+     {key:'fecha',width:14},{key:'profesional',width:22},{key:'cliente',width:22},
+     {key:'servicio',width:26},{key:'pago',width:17},{key:'venta',width:16},
+     {key:'rate',width:14},{key:'comision',width:16},{key:'salon',width:25}
+   ];
+   wd.mergeCells('A1:I2');
+   wd.getCell('A1').value='IKER STUDIO';
+   wd.getCell('A1').font={name:'Aptos Display',size:22,bold:true,color:{argb:white}};
+   wd.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:ink}};
+   wd.getCell('A1').alignment={vertical:'middle',horizontal:'left'};
+   wd.getRow(1).height=25;wd.getRow(2).height=18;
+   wd.mergeCells('A3:I3');
+   wd.getCell('A3').value=`DETALLE DE TRABAJOS · ${fmtDate(from)} al ${fmtDate(to)}`;
+   wd.getCell('A3').font={bold:true,size:12,color:{argb:rose}};
+   wd.getRow(4).height=7;
+
+   const headers=['Fecha','Profesional','Cliente','Servicio','Forma de pago','Venta','Comisión %','Comisión','Salón después de comisión'];
+   const hr=wd.getRow(5);
+   headers.forEach((h,i)=>{
+     const cell=hr.getCell(i+1);cell.value=h;
+     cell.font={bold:true,color:{argb:white}};
+     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:rose}};
+     cell.alignment={vertical:'middle',horizontal:i>=5?'right':'left',wrapText:true};
+     cell.border=borders;
+   });
+   hr.height=28;
+
+   list.forEach((j,idx)=>{
+     const amount=Number(j.amount||0),rate=Number(j.commission_rate||0),commission=amount*rate/100;
+     const d=new Date(j.performed_at||j.created_at);
+     const row=wd.addRow([
+       isNaN(d)?'':d,workerName(j.worker_id),j.client_name||'',serviceName(j.service_id),
+       j.payment_method==='cash'?'Efectivo':'SINPE',amount,rate,commission,amount-commission
+     ]);
+     row.height=20;
+     row.eachCell((cell,col)=>{
+       cell.border=borders;
+       cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:idx%2?cream:white}};
+       cell.alignment={vertical:'middle',horizontal:col>=6?'right':'left'};
+     });
+     row.getCell(1).numFmt='dd/mm/yyyy';
+     [6,8,9].forEach(c=>row.getCell(c).numFmt=moneyFmt);
+     row.getCell(7).numFmt='0"%"';
+   });
+
+   const totalRow=wd.addRow(['','','','','TOTALES',sales,'',comms,sales-comms]);
+   totalRow.height=23;
+   totalRow.eachCell((cell,col)=>{
+     cell.font={bold:true,color:{argb:ink}};
+     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:roseLight}};
+     cell.border=borders;
+     cell.alignment={vertical:'middle',horizontal:col>=6?'right':'left'};
+   });
+   [6,8,9].forEach(c=>totalRow.getCell(c).numFmt=moneyFmt);
+
+   if(list.length){
+     wd.autoFilter={from:{row:5,column:1},to:{row:5+list.length,column:9}};
+   }
+   wd.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9};
+   wd.pageMargins={left:0.25,right:0.25,top:0.45,bottom:0.45,header:0.2,footer:0.2};
+   wd.headerFooter.oddFooter='IKER STUDIO · Página &P de &N';
+
+   const buffer=await wb.xlsx.writeBuffer();
+   const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+   const url=URL.createObjectURL(blob);
+   const a=document.createElement('a');
+   a.href=url;a.download=`IKER_Studio_Historial_${excelSafeName(from||'inicio')}_${excelSafeName(to||'hoy')}.xlsx`;
+   document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),1500);
+   toast('Excel profesional generado.');
  }catch(err){
    console.error(err);
    toast('No se pudo generar el Excel: '+(err?.message||err));
