@@ -5,40 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>IKER Studio · V1.9</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-function localDate(d){return d.toLocaleDateString('es-CR',{day:'2-digit',month:'2-digit',year:'numeric'})}
-function updateBusinessPeriod(){
- const period=document.getElementById('bizPeriod');
- const fromWrap=document.getElementById('bizFromWrap'),toWrap=document.getElementById('bizToWrap');
- if(!period)return;
- const custom=period.value==='custom';
- if(fromWrap)fromWrap.style.display=custom?'grid':'none';
- if(toWrap)toWrap.style.display=custom?'grid':'none';
- renderBusiness();
-}
-function openBusinessReport(){
- try{
-   const x=renderBusiness(); if(!x){alert('No se pudo preparar el reporte.');return}
-   const byId=id=>document.getElementById(id);
-   byId('reportPeriod').textContent=`Período: ${localDate(x.from)} al ${localDate(x.to)}`;
-   byId('reportGenerated').textContent=`Generado: ${new Date().toLocaleString('es-CR')}`;
-   byId('rSales').textContent=money(x.sales); byId('rCash').textContent=money(x.cash);
-   byId('rSinpe').textContent=money(x.sinpe); byId('rComms').textContent=money(x.comms);
-   byId('rExpenses').textContent=money(x.exps); byId('rAfter').textContent=money(x.afterComms);
-   byId('rNet').textContent=money(x.net);
-   byId('rWorkers').innerHTML=Object.keys(x.by).length
-     ?Object.entries(x.by).map(([id,v])=>`<tr><td>${esc(workerName(id))}</td><td>${money(v.sales)}</td><td>${money(v.comm)}</td></tr>`).join('')
-     :'<tr><td colspan="3">Sin producción en el período.</td></tr>';
-   setTimeout(()=>window.print(),150);
- }catch(err){
-   console.error(err);
-   alert('No se pudo abrir el reporte: '+(err?.message||err));
- }
-}
-document.getElementById('bizPeriod')?.addEventListener('change',updateBusinessPeriod);
-document.getElementById('bizFrom')?.addEventListener('change',renderBusiness);
-document.getElementById('bizTo')?.addEventListener('change',renderBusiness);
-</script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
