@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>IKER Studio · V1.9</title>
+<title>IKER Studio · V1.10</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--ink:#201a1d;--cream:#f7f1ea;--paper:#fffaf5;--rose:#b96f72;--rose2:#96575a;--gold:#b28a57;--muted:#756b6e;--line:#e7dbd2;--ok:#765b45;--danger:#a33e3e}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
@@ -173,7 +174,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 </section>
 
 <section id="historial" class="view">
-<div class="sectionTitle"><h2>Historial</h2><button class="secondary" id="btnHistoryReport" type="button" onclick="openHistoryReport()">Ver / imprimir reporte</button></div>
+<div class="sectionTitle"><h2>Historial</h2><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="secondary" id="btnHistoryExcel" type="button" onclick="exportHistoryExcel()">Exportar Excel</button><button class="secondary" id="btnHistoryReport" type="button" onclick="openHistoryReport()">Ver / imprimir reporte</button></div></div>
 <div class="panel">
  <div class="grid">
   <label>Desde<input id="historyFrom" type="date" onchange="renderHistory()"></label>
@@ -420,7 +421,7 @@ function renderHistory(){
  const workers=team.filter(x=>x.active||jobs.some(j=>j.worker_id===x.user_id));
  historyWorker.innerHTML='<option value="">Todos</option>'+workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Profesional')}</option>`).join('');
  if(workers.some(w=>w.user_id===current))historyWorker.value=current;
- if(!isAdmin()){historyWorker.value=session.user.id;historyWorker.disabled=true;btnHistoryReport.style.display='none'}
+ if(!isAdmin()){historyWorker.value=session.user.id;historyWorker.disabled=true;btnHistoryReport.style.display='none';if(document.getElementById('btnHistoryExcel'))btnHistoryExcel.style.display='none'}
  const list=historyFiltered();
  const sales=list.reduce((s,j)=>s+Number(j.amount||0),0);
  const comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
@@ -429,6 +430,67 @@ function renderHistory(){
    const d=new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR');
    return `<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*Number(j.commission_rate)/100)} · ${j.commission_rate}%</div></div></div>`
  }).join(''):'<div class="empty">No hay trabajos con estos filtros.</div>';
+}
+function excelSafeName(v){return String(v||'').replace(/[\\\/:*?"<>|]/g,'-').trim()}
+function exportHistoryExcel(){
+ try{
+   if(typeof XLSX==='undefined'){toast('No se pudo cargar el módulo de Excel. Revise la conexión e intente de nuevo.');return}
+   const list=historyFiltered();
+   const sales=list.reduce((sum,j)=>sum+Number(j.amount||0),0);
+   const comms=list.reduce((sum,j)=>sum+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
+   const cash=list.filter(j=>j.payment_method==='cash').reduce((sum,j)=>sum+Number(j.amount||0),0);
+   const sinpe=list.filter(j=>j.payment_method==='sinpe').reduce((sum,j)=>sum+Number(j.amount||0),0);
+   const who=historyWorker.value?workerName(historyWorker.value):'Todos los profesionales';
+   const pay=historyPay.value?(historyPay.value==='cash'?'Efectivo':'SINPE'):'Todas';
+   const from=historyFrom.value||'', to=historyTo.value||'';
+
+   const summary=[
+     ['IKER STUDIO'],
+     ['Reporte de historial'],
+     [],
+     ['Desde',from],
+     ['Hasta',to],
+     ['Profesional',who],
+     ['Forma de pago',pay],
+     [],
+     ['Trabajos',list.length],
+     ['Ventas',sales],
+     ['Efectivo',cash],
+     ['SINPE',sinpe],
+     ['Comisiones',comms],
+     ['Después de comisiones',sales-comms]
+   ];
+   const detail=list.map(j=>{
+     const amount=Number(j.amount||0);
+     const rate=Number(j.commission_rate||0);
+     const commission=amount*rate/100;
+     return {
+       'Fecha':String(j.performed_at||j.created_at||'').slice(0,10),
+       'Profesional':workerName(j.worker_id),
+       'Cliente':j.client_name||'',
+       'Servicio':serviceName(j.service_id),
+       'Forma de pago':j.payment_method==='cash'?'Efectivo':'SINPE',
+       'Venta':amount,
+       'Comisión %':rate,
+       'Comisión':commission,
+       'Salón después de comisión':amount-commission
+     };
+   });
+
+   const wb=XLSX.utils.book_new();
+   const wsSummary=XLSX.utils.aoa_to_sheet(summary);
+   wsSummary['!cols']=[{wch:26},{wch:28}];
+   const wsDetail=XLSX.utils.json_to_sheet(detail,{header:['Fecha','Profesional','Cliente','Servicio','Forma de pago','Venta','Comisión %','Comisión','Salón después de comisión']});
+   wsDetail['!cols']=[{wch:12},{wch:22},{wch:22},{wch:24},{wch:16},{wch:14},{wch:12},{wch:14},{wch:25}];
+   XLSX.utils.book_append_sheet(wb,wsSummary,'Resumen');
+   XLSX.utils.book_append_sheet(wb,wsDetail,'Detalle de trabajos');
+   const suffix=`${from||'inicio'}_${to||'hoy'}`;
+   XLSX.writeFile(wb,`IKER_Studio_Historial_${excelSafeName(suffix)}.xlsx`);
+   toast('Excel generado.');
+ }catch(err){
+   console.error(err);
+   toast('No se pudo generar el Excel: '+(err?.message||err));
+ }
 }
 function openHistoryReport(){
  const list=historyFiltered(), sales=list.reduce((s,j)=>s+Number(j.amount||0),0), comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
