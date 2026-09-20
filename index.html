@@ -240,6 +240,7 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 <button class="tab" data-view="citas" onclick="show('citas',this)">Citas</button>
 <button class="tab" data-view="clientes" onclick="show('clientes',this)">Clientes</button>
 <button class="tab" data-view="registro" onclick="show('registro',this)">Nuevo trabajo</button>
+<button class="tab ownerTab" data-view="servicios" onclick="show('servicios',this)">Servicios</button>
 <button class="tab ownerTab" data-view="combos" onclick="show('combos',this)">Combos</button>
 <button class="tab ownerTab" data-view="equipo" onclick="show('equipo',this)">Profesionales</button>
 <button class="tab" data-view="historial" onclick="show('historial',this)">Historial</button>
@@ -355,6 +356,27 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 </section>
 
 
+
+<section id="servicios" class="view">
+<div class="sectionTitle"><h2>Servicios</h2><button class="primary" type="button" onclick="newServiceForm()">+ Nuevo servicio</button></div>
+<div id="serviceForm" class="panel hide">
+ <h3 id="serviceFormTitle">Nuevo servicio</h3>
+ <input id="serviceEditId" type="hidden">
+ <div class="grid">
+  <label>Nombre del servicio<input id="serviceEditName" placeholder="Ej. Corte de cabello"></label>
+  <label>Precio base ₡<input id="serviceEditPrice" type="number" min="0" step="500" placeholder="Opcional"></label>
+  <label>Grupo<select id="serviceEditGroup"><option value="masculino">Masculino</option><option value="femenino">Femenino</option><option value="unisex">Unisex</option></select></label>
+  <label>Comisión<input value="50%" disabled></label>
+ </div>
+ <button class="primary" type="button" onclick="saveServiceRecord()">Guardar servicio</button>
+ <button class="secondary" type="button" onclick="document.getElementById('serviceForm').classList.add('hide')">Cancelar</button>
+</div>
+<div class="panel">
+ <label>Buscar servicio<input id="serviceSearch" placeholder="Buscar por nombre" oninput="renderServicesManager()"></label>
+ <div id="serviceManagerList" style="margin-top:12px"></div>
+</div>
+</section>
+
 <section id="combos" class="view">
 <div class="sectionTitle"><h2>Combos y precios especiales</h2><button class="primary" type="button" onclick="toggle('comboForm')">+ Nuevo combo</button></div>
 <div id="comboForm" class="panel hide">
@@ -385,15 +407,24 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
  <button class="primary" id="professionalSaveBtn" type="button" onclick="addProfessional()">Agregar profesional</button>
 </div>
 <div class="panel"><h3>Profesionales registrados</h3><div id="professionalList"></div></div>
-<div class="panel"><h3>Servicios y comisión</h3>
- <div id="servicesList"></div>
- <div class="grid" style="margin-top:14px">
-  <label>Nuevo servicio<input id="newServiceName" placeholder="Ej. Nanoplastia"></label>
-  <label>Comisión<input value="50%" disabled></label>
- </div>
- <input id="newServiceRate" type="hidden" value="50"><button class="primary" onclick="addService()">Agregar servicio</button>
-</div>
 </section>
+
+
+<div id="jobEditModal" class="panel hide" style="position:fixed;z-index:1200;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,560px);box-shadow:0 18px 60px rgba(0,0,0,.28)">
+ <h3>Editar trabajo registrado</h3>
+ <input id="editJobId" type="hidden">
+ <div class="grid">
+  <label>Profesional<select id="editJobProfessional"></select></label>
+  <label>Servicio<select id="editJobService"></select></label>
+  <label>Cliente<input id="editJobClient"></label>
+  <label>Monto cobrado ₡<input id="editJobAmount" type="number" min="0" step="100"></label>
+  <label>Forma de pago<select id="editJobPayment"><option value="cash">Efectivo</option><option value="sinpe">SINPE</option></select></label>
+ </div>
+ <div style="display:flex;gap:8px;margin-top:12px">
+  <button class="primary" onclick="saveJobEdit()">Guardar cambios</button>
+  <button class="secondary" onclick="document.getElementById('jobEditModal').classList.add('hide')">Cancelar</button>
+ </div>
+</div>
 
 <section id="historial" class="view">
 <div class="sectionTitle"><h2>Historial</h2><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="secondary" id="btnHistoryExcel" type="button" onclick="exportHistoryExcel()">Exportar Excel</button><button class="secondary" id="btnHistoryReport" type="button" onclick="openHistoryReport()">Ver / imprimir reporte</button></div></div>
@@ -509,33 +540,17 @@ const SUPABASE_URL='https://mzsxdobicqmbnajqpbfe.supabase.co';
 const SUPABASE_KEY='sb_publishable_ekWbZ5tswWwlGXW5DeP-uA_9yMDXwk4';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let session=null, profile=null, role=null, jobs=[], services=[], team=[], inventory=[], inventoryMovements=[], expenses=[], payMethod='cash';
-let serviceGroups=JSON.parse(localStorage.getItem('ikerServiceGroups')||'{}');
-let professionals=JSON.parse(localStorage.getItem('ikerProfessionals')||'[]');
-let localProfessionalJobs=[]; localStorage.setItem('ikerProfessionalJobs','[]');
+let serviceGroups={};
+let professionals=[];
+let localProfessionalJobs=[];
 
-function migrateProfessionalIdsToUUID(){
- let changed=false;
- professionals.forEach(p=>{
-   if(/^p\d+$/.test(String(p.id||''))){
-     const old=String(p.id), neu=crypto.randomUUID();
-     p.id=neu;
-     appointments.forEach(a=>{if(String(a.worker_id)===old)a.worker_id=neu});
-     scheduleBlocks.forEach(b=>{if(String(b.worker_id)===old)b.worker_id=neu});
-     changed=true;
-   }
- });
- if(changed){
-   localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
-   localStorage.setItem('ikerAppointments',JSON.stringify(appointments));
-   localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));
- }
-}
+function migrateProfessionalIdsToUUID(){}
 
-let clients=JSON.parse(localStorage.getItem('ikerClients')||'[]');
-let deletedClientKeys=JSON.parse(localStorage.getItem('ikerDeletedClientKeys')||'[]');
-let combos=JSON.parse(localStorage.getItem('ikerCombos')||'[]');
-let appointments=JSON.parse(localStorage.getItem('ikerAppointments')||'[]');
-let scheduleBlocks=JSON.parse(localStorage.getItem('ikerScheduleBlocks')||'[]');
+let clients=[];
+let deletedClientKeys=[];
+let combos=[];
+let appointments=[];
+let scheduleBlocks=[];
 
 const money=n=>'₡'+Math.round(Number(n||0)).toLocaleString('es-CR');
 const localDate=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
@@ -544,7 +559,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&
 function loading(v){document.getElementById('loading').style.display=v?'grid':'none'}
 function toast(t){const x=document.getElementById('toast');x.textContent=t;x.style.display='block';setTimeout(()=>x.style.display='none',2600)}
 function toggle(id){document.getElementById(id).classList.toggle('hide')}
-function show(id,btn){if(id==='equipo')setTimeout(()=>{renderProfessionals();fillProfessionalSelectors()},0);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory();if(id==='citas')renderAppointments();if(id==='clientes')renderClients();if(id==='combos')renderCombos()}
+function show(id,btn){if(id==='equipo')setTimeout(()=>{renderProfessionals();fillProfessionalSelectors()},0);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory();if(id==='citas')renderAppointments();if(id==='clientes')renderClients();if(id==='combos')renderCombos();if(id==='servicios')renderServicesManager()}
 function setPay(m){payMethod=m;payCash.classList.toggle('on',m==='cash');paySinpe.classList.toggle('on',m==='sinpe')}
 function isAdmin(){return ['owner','admin'].includes(role)}
 
@@ -560,29 +575,13 @@ async function logout(){await sb.auth.signOut();location.reload()}
 const IKER_CLEAN_START='2026-09-19T21:40:00.000Z';
 function applyCleanStart(){
  localProfessionalJobs=[];
- localStorage.setItem('ikerProfessionalJobs','[]');
  if(Array.isArray(jobs)) jobs=jobs.filter(j=>{
    const d=j.performed_at||j.created_at||j.job_date;
    return d && new Date(d)>=new Date(IKER_CLEAN_START);
  });
 }
 
-function cleanupPrototypeData(){
- const clean=(arr)=>arr.filter(x=>!(x&&(
-   x.demo===true||x.sample===true||x.is_demo===true||
-   String(x.id||'').startsWith('demo-')||String(x.id||'').startsWith('sample-')
- )));
- professionals=clean(professionals);
- clients=clean(clients);
- appointments=clean(appointments);
- scheduleBlocks=clean(scheduleBlocks);
- localProfessionalJobs=clean(localProfessionalJobs);
- localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
- localStorage.setItem('ikerClients',JSON.stringify(clients));
- localStorage.setItem('ikerAppointments',JSON.stringify(appointments));
- localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));
- localStorage.setItem('ikerProfessionalJobs',JSON.stringify(localProfessionalJobs));
-}
+function cleanupPrototypeData(){}
 
 async function boot(s){
  cleanupPrototypeData();
@@ -601,6 +600,7 @@ async function boot(s){
  if(!isAdmin()) document.querySelectorAll('.ownerTab').forEach(x=>x.classList.add('hide'));
  try{
    await loadAll();
+   renderDashboard();
  }catch(e){
    console.error('IKER Studio:',e);
    toast('La aplicación cargó, pero una sección presentó un error.');
@@ -611,7 +611,7 @@ async function boot(s){
 async function loadAll(){
  const uid=session.user.id;
  let queries=[
-  sb.from('beauty_services').select('*').eq('active',true).order('name'),
+  sb.from('beauty_services').select('*').order('name'),
   sb.from('beauty_jobs').select('*').order('performed_at',{ascending:false})
  ];
  if(isAdmin()){
@@ -622,6 +622,7 @@ async function loadAll(){
  }
  const rs=await Promise.all(queries);
  services=rs[0].data||[]; jobs=rs[1].data||[];
+ await loadOperationalDataFromSupabase();
  if(isAdmin()){
    const accesses=rs[2].data||[], ids=accesses.map(x=>x.user_id);
    let profiles=[];
@@ -646,13 +647,14 @@ function renderAll(){
  fillProfessionalSelectors();
  fillJobClientOptions();
 }
+function jobProfessionalId(j){return j?.professional_id||j?.worker_id||''}
 function workerName(id){return professionalName(id)}
 function serviceName(id){return services.find(x=>x.id===id)?.name||'Servicio'}
 function renderDashboard(){
  const d=localDate(), todays=jobs.filter(j=>String(j.performed_at).slice(0,10)===d);
  const sales=todays.reduce((s,j)=>s+Number(j.amount),0), cash=todays.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount),0), sinpe=sales-cash, comm=todays.reduce((s,j)=>s+Number(j.amount)*0.50,0);
  salesToday.textContent=money(sales);cashToday.textContent=money(cash);sinpeToday.textContent=money(sinpe);commToday.textContent=money(comm);
- const by={};todays.forEach(j=>{by[j.worker_id]??={sales:0,comm:0,count:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*0.50;by[j.worker_id].count++});
+ const by={};todays.forEach(j=>{by[jobProfessionalId(j)]??={sales:0,comm:0,count:0};by[jobProfessionalId(j)].sales+=Number(j.amount);by[jobProfessionalId(j)].comm+=Number(j.amount)*0.50;by[jobProfessionalId(j)].count++});
  todayWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><div><b>${esc(workerName(id))}</b><div class="small">${x.count} trabajo(s)</div></div><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
 }
 function serviceChanged(){const s=services.find(x=>x.id===jobService.value);commissionHint.textContent=s?`Este servicio paga 50% de comisión al profesional.`:'Seleccione un servicio para ver la comisión.'}
@@ -728,15 +730,16 @@ async function saveJob(){
    service_name:s.name
  };
  localProfessionalJobs.push(row);
- localStorage.setItem('ikerProfessionalJobs',JSON.stringify(localProfessionalJobs));
+
  const opened=await openProfessionalJobWhatsApp(prof,s,amount,client,payMethod);
  jobClient.value='';jobAmount.value='';
  toast(opened?'Trabajo registrado. Comprobante en imagen preparado para WhatsApp.':'Trabajo registrado. El profesional no tiene WhatsApp registrado.');
  await loadAll();show('resumen',document.querySelector('[data-view="resumen"]'));
 }
 function renderTeam(){
- if(!isAdmin())return;
- teamList.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary" onclick="resetTeamPassword('${x.user_id}','${x.profile?.full_name?esc(x.profile.full_name).replace(/'/g,'&#39;'):'Usuario'}')">Nueva contraseña</button><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
+ const teamBox=document.getElementById('teamList');
+ if(!isAdmin()||!teamBox)return;
+ teamBox.innerHTML=team.length?team.map(x=>`<div class="row"><div><b>${esc(x.profile?.full_name||'Usuario')}</b><div class="small">${x.role==='owner'?'Propietario':x.role==='admin'?'Administradora':'Profesional'}</div></div><div class="right">${x.role==='owner'?`<span class="pill">Activo</span>`:`<select style="width:auto;margin:0 6px 0 0;padding:7px" onchange="changeTeamRole('${x.user_id}',this.value)"><option value="worker" ${x.role==='worker'?'selected':''}>Profesional</option><option value="admin" ${x.role==='admin'?'selected':''}>Administradora</option></select><button class="secondary" onclick="resetTeamPassword('${x.user_id}','${x.profile?.full_name?esc(x.profile.full_name).replace(/'/g,'&#39;'):'Usuario'}')">Nueva contraseña</button><button class="secondary ${x.active?'danger':''}" onclick="setTeamActive('${x.user_id}',${!x.active})">${x.active?'Desactivar':'Activar'}</button>`}</div></div>`).join(''):'<div class="empty">No hay miembros.</div>';
  servicesList.innerHTML=services.length?services.map(s=>`<div class="row"><div><b>${esc(s.name)}</b></div><div style="display:flex;gap:8px;align-items:center"><span class="pill">50%</span><button class="secondary" onclick="toggleService('${s.id}',false)">Desactivar</button></div></div>`).join(''):'<div class="empty">Aún no hay servicios. Agregue el primero.</div>';
 }
 async function beautyUserAction(payload){
@@ -803,13 +806,13 @@ function historyFiltered(){
  const worker=historyWorker.value, pay=historyPay.value;
  return jobs.filter(j=>{
    const d=new Date(j.performed_at||j.created_at);
-   return (!from||d>=from)&&(!to||d<=to)&&(!worker||j.worker_id===worker)&&(!pay||j.payment_method===pay);
+   return (!from||d>=from)&&(!to||d<=to)&&(!worker||jobProfessionalId(j)===worker)&&(!pay||j.payment_method===pay);
  });
 }
 function renderHistory(){
  historyRangeDefaults();
  const current=historyWorker.value;
- const workers=team.filter(x=>x.active||jobs.some(j=>j.worker_id===x.user_id));
+ const workers=team.filter(x=>x.active||jobs.some(j=>jobProfessionalId(j)===x.user_id));
  historyWorker.innerHTML='<option value="">Todos</option>'+workers.map(w=>`<option value="${w.user_id}">${esc(w.profile?.full_name||'Profesional')}</option>`).join('');
  if(workers.some(w=>w.user_id===current))historyWorker.value=current;
  if(!isAdmin()){historyWorker.value=session.user.id;historyWorker.disabled=true;btnHistoryReport.style.display='none';if(document.getElementById('btnHistoryExcel'))btnHistoryExcel.style.display='none'}
@@ -819,7 +822,7 @@ function renderHistory(){
  historyCount.textContent=list.length;historySales.textContent=money(sales);historyComms.textContent=money(comms);historyAvg.textContent=money(list.length?sales/list.length:0);
  historyList.innerHTML=list.length?list.map(j=>{
    const d=new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR');
-   return `<div class="row"><div><b>${esc(workerName(j.worker_id))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*0.50)} · ${j.commission_rate}%</div></div></div>`
+   return `<div class="row"><div><b>${esc(workerName(jobProfessionalId(j)))}</b><div class="small">${d} · ${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount)*0.50)} · ${j.commission_rate}%</div>${isAdmin()?`<div style="display:flex;gap:6px;margin-top:6px"><button class="secondary" onclick="editJobRecord('${j.id}')">✏️ Editar</button><button class="secondary danger" onclick="deleteJobRecord('${j.id}')">Eliminar</button></div>`:''}</div></div>`
  }).join(''):'<div class="empty">No hay trabajos con estos filtros.</div>';
 }
 function excelSafeName(v){return String(v||'').replace(/[\\\/:*?"<>|]/g,'-').trim()}
@@ -962,7 +965,7 @@ async function exportHistoryExcel(){
      const amount=Number(j.amount||0),rate=Number(j.commission_rate||0),commission=amount*rate/100;
      const d=new Date(j.performed_at||j.created_at);
      const row=wd.addRow([
-       isNaN(d)?'':d,workerName(j.worker_id),j.client_name||'',serviceName(j.service_id),
+       isNaN(d)?'':d,workerName(jobProfessionalId(j)),j.client_name||'',serviceName(j.service_id),
        j.payment_method==='cash'?'Efectivo':'SINPE',amount,rate,commission,amount-commission
      ]);
      row.height=20;
@@ -1010,7 +1013,7 @@ function openHistoryReport(){
  const list=historyFiltered(), sales=list.reduce((s,j)=>s+Number(j.amount||0),0), comms=list.reduce((s,j)=>s+Number(j.amount||0)*Number(j.commission_rate||0)/100,0);
  const cash=list.filter(j=>j.payment_method==='cash').reduce((s,j)=>s+Number(j.amount||0),0), sinpe=sales-cash;
  const who=historyWorker.value?workerName(historyWorker.value):'Todos los profesionales';
- const rows=list.map(j=>`<tr><td>${new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR')}</td><td>${esc(workerName(j.worker_id))}</td><td>${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''}</td><td>${j.payment_method==='cash'?'Efectivo':'SINPE'}</td><td style="text-align:right">${money(j.amount)}</td><td style="text-align:right">${money(Number(j.amount)*0.50)}</td></tr>`).join('');
+ const rows=list.map(j=>`<tr><td>${new Date(j.performed_at||j.created_at).toLocaleDateString('es-CR')}</td><td>${esc(workerName(jobProfessionalId(j)))}</td><td>${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''}</td><td>${j.payment_method==='cash'?'Efectivo':'SINPE'}</td><td style="text-align:right">${money(j.amount)}</td><td style="text-align:right">${money(Number(j.amount)*0.50)}</td></tr>`).join('');
  historyReportPeriod.textContent=`${new Date(historyFrom.value+'T00:00:00').toLocaleDateString('es-CR')} al ${new Date(historyTo.value+'T00:00:00').toLocaleDateString('es-CR')}`;
  historyReportFilter.textContent=`${who} · ${historyPay.value?(historyPay.value==='cash'?'Efectivo':'SINPE'):'Todas las formas de pago'}`;
  hrCount.textContent=list.length;hrSales.textContent=money(sales);hrCash.textContent=money(cash);hrSinpe.textContent=money(sinpe);hrComms.textContent=money(comms);
@@ -1224,8 +1227,7 @@ function addProfessional(){
  }
  input.value='';if(phoneEl)phoneEl.value='';
  const btn=document.getElementById('professionalSaveBtn');if(btn)btn.textContent='Agregar profesional';
- localStorage.setItem('ikerProfessionals',JSON.stringify(professionals));
- persistAppointments();renderProfessionals();fillProfessionalSelectors();
+persistAppointments();renderProfessionals();fillProfessionalSelectors();
  toast('Profesional guardado.');
 }
 function toggleProfessional(id){
@@ -1241,7 +1243,7 @@ function renameProfessional(id){
 function renderProfessionals(){
  const box=document.getElementById('professionalList');if(!box)return;
  if(!professionals.length){
-   box.innerHTML='<div class="empty">Todavía no hay profesionales registrados en este navegador. Agregue el primero arriba.</div>';
+   box.innerHTML='<div class="empty">Todavía no hay profesionales registrados en Supabase. Agregue el primero arriba.</div>';
    return;
  }
  box.innerHTML=professionals.map(p=>`
@@ -1277,7 +1279,7 @@ function editProfessional(id){
 function fillJobServiceOptions(){
  const sel=document.getElementById('jobService');if(!sel)return;
  const g=document.getElementById('jobServiceGroup')?.value||'';
- const arr=services.filter(s=>!g||serviceGroup(s)===g);
+ const arr=services.filter(s=>s.active!==false&&(!g||serviceGroup(s)===g));
  sel.innerHTML='<option value="">Seleccione servicio</option>'+arr.map(s=>`<option value="${s.id}">${esc(s.name)} · 50%</option>`).join('');
 }
 function fillAppointmentServiceOptions(){
@@ -1321,7 +1323,7 @@ function appointmentSelectionChanged(){
  else {const s=services.find(x=>String(x.id)===String(v));if(s&&price&&servicePrice(s))price.value=servicePrice(s)}
 }
 
-function persistAppointments(){localStorage.setItem('ikerAppointments',JSON.stringify(appointments));localStorage.setItem('ikerScheduleBlocks',JSON.stringify(scheduleBlocks));localStorage.setItem('ikerCombos',JSON.stringify(combos));localStorage.setItem('ikerClients',JSON.stringify(clients));localStorage.setItem('ikerDeletedClientKeys',JSON.stringify(deletedClientKeys));localStorage.setItem('ikerServiceGroups',JSON.stringify(serviceGroups));localStorage.setItem('ikerProfessionals',JSON.stringify(professionals))}
+function persistAppointments(){}
 function appointmentStatusLabel(s){return ({pending:'Pendiente',confirmed:'Confirmada',arrived:'Llegó',service:'En servicio',done:'Finalizada',cancelled:'Cancelada',noshow:'No se presentó'})[s]||s}
 function fillAppointmentSelectors(){
  fillProfessionalSelectors();
@@ -1518,7 +1520,7 @@ function renderBusiness(){
  monthSales.textContent=money(sales);monthCash.textContent=money(cash);monthSinpe.textContent=money(sinpe);
  monthComms.textContent=money(comms);monthAfterComms.textContent=money(afterComms);
  monthExpenses.textContent=money(exps);monthNet.textContent=money(net);
- const by={};jj.forEach(j=>{by[j.worker_id]??={sales:0,comm:0};by[j.worker_id].sales+=Number(j.amount);by[j.worker_id].comm+=Number(j.amount)*0.50});
+ const by={};jj.forEach(j=>{by[jobProfessionalId(j)]??={sales:0,comm:0};by[jobProfessionalId(j)].sales+=Number(j.amount);by[jobProfessionalId(j)].comm+=Number(j.amount)*0.50});
  monthWorkers.innerHTML=Object.keys(by).length?Object.entries(by).map(([id,x])=>`<div class="row"><b>${esc(workerName(id))}</b><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`).join(''):'<div class="empty">Sin producción en este período.</div>';
  renderWeeklyClose();
  return {from,to,sales,cash,sinpe,comms,exps,afterComms,net,by};
@@ -1543,7 +1545,7 @@ function weeklySummary(){
  const jj=jobs.filter(j=>{const d=itemDate(j);return d>=from&&d<=to});
  const by={};
  jj.forEach(j=>{
-   const id=j.worker_id;
+   const id=jobProfessionalId(j);
    by[id]??={jobs:0,sales:0,comm:0,cash:0,sinpe:0};
    const a=Number(j.amount||0), c=a*Number(j.commission_rate||0)/100;
    by[id].jobs++; by[id].sales+=a; by[id].comm+=c;
@@ -1700,6 +1702,451 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{syncClientsFromAppointments();fillAppointmentSelectors();updateClientSuggestions();fillJobClientOptions();renderAppointments();renderClients();renderCombos()},700)});
+
+/* ============================================================
+   IKER STUDIO V25 — PERSISTENCIA REFORZADA
+   Toda la información operativa se guarda en Supabase.
+   localStorage NO se usa como base de datos del negocio.
+   ============================================================ */
+
+async function loadOperationalDataFromSupabase(){
+  const [pr,cl,sg,co,cs,ap,bl]=await Promise.all([
+    sb.from('beauty_professionals').select('*').eq('active',true).order('name'),
+    sb.from('beauty_clients').select('*').eq('active',true).order('name'),
+    sb.from('beauty_service_groups').select('*'),
+    sb.from('beauty_combos').select('*').order('name'),
+    sb.from('beauty_combo_services').select('*'),
+    sb.from('beauty_appointments').select('*').order('appointment_at',{ascending:true}),
+    sb.from('beauty_schedule_blocks').select('*').order('starts_at',{ascending:true})
+  ]);
+  const failed=[pr,cl,sg,co,cs,ap,bl].find(x=>x.error);
+  if(failed) throw failed.error;
+
+  professionals=pr.data||[];
+  clients=cl.data||[];
+  serviceGroups={};
+  (sg.data||[]).forEach(x=>serviceGroups[String(x.service_id)]=x.service_group);
+
+  const comboServices=cs.data||[];
+  combos=(co.data||[]).map(c=>({
+    ...c, group:c.service_group||'unisex',
+    service_ids:comboServices.filter(x=>x.combo_id===c.id).map(x=>x.service_id)
+  }));
+
+  appointments=(ap.data||[]).map(a=>{
+    const d=new Date(a.appointment_at);
+    const date=d.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
+    const time=d.toLocaleTimeString('en-GB',{timeZone:'America/Costa_Rica',hour:'2-digit',minute:'2-digit'});
+    return {...a,
+      client:a.client_name||clients.find(c=>c.id===a.client_id)?.name||'',
+      worker_id:a.professional_id||'',
+      service_id:a.combo_id?'combo:'+a.combo_id:(a.service_id||''),
+      date,time,duration:a.duration_minutes||60,
+      price:a.special_price ?? a.list_price ?? 0,
+      special_reason:a.special_reason||''
+    };
+  });
+
+  scheduleBlocks=(bl.data||[]).map(b=>{
+    const st=new Date(b.starts_at), en=new Date(b.ends_at);
+    return {...b,
+      worker_id:b.professional_id,
+      date:st.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'}),
+      from:st.toLocaleTimeString('en-GB',{timeZone:'America/Costa_Rica',hour:'2-digit',minute:'2-digit'}),
+      to:en.toLocaleTimeString('en-GB',{timeZone:'America/Costa_Rica',hour:'2-digit',minute:'2-digit'})
+    };
+  });
+  localProfessionalJobs=[];
+}
+
+async function refreshOperational(){
+  await loadOperationalDataFromSupabase();
+  renderProfessionals(); fillProfessionalSelectors();
+  renderClients(); updateClientSuggestions(); fillJobClientOptions();
+  renderCombos(); renderAppointments();
+}
+
+addProfessional=async function(){
+  const input=document.getElementById('professionalName'), phoneEl=document.getElementById('professionalPhone');
+  const name=input?.value.trim(), phone=normalizePhone(phoneEl?.value||'');
+  if(!name){toast('Escriba el nombre o apodo.');return}
+  loading(true);
+  let q;
+  if(editingProfessionalId){
+    q=await sb.from('beauty_professionals').update({name,phone:phone||null,updated_at:new Date().toISOString()}).eq('id',editingProfessionalId);
+  }else{
+    q=await sb.from('beauty_professionals').insert({name,phone:phone||null,created_by:session.user.id});
+  }
+  loading(false);
+  if(q.error){toast('No se guardó. '+q.error.message);return}
+  editingProfessionalId=null; input.value=''; if(phoneEl)phoneEl.value='';
+  const btn=document.getElementById('professionalSaveBtn');if(btn)btn.textContent='Agregar profesional';
+  await refreshOperational(); toast('Profesional guardado en Supabase.');
+};
+
+toggleProfessional=async function(id){
+  const p=professionals.find(x=>x.id===id);if(!p)return;
+  const {error}=await sb.from('beauty_professionals').update({active:!(p.active!==false),updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se pudo actualizar. '+error.message);return}
+  await refreshOperational();
+};
+
+renameProfessional=async function(id){
+  const p=professionals.find(x=>x.id===id);if(!p)return;
+  const n=prompt('Nombre o apodo del profesional:',p.name);if(n===null)return;
+  const ph=prompt('WhatsApp del profesional:',p.phone||'');if(ph===null)return;
+  if(!n.trim())return;
+  const {error}=await sb.from('beauty_professionals').update({name:n.trim(),phone:normalizePhone(ph)||null,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se guardó. '+error.message);return}
+  await refreshOperational();toast('Profesional actualizado.');
+};
+
+saveClient=async function(){
+  const id=document.getElementById('clientId').value;
+  const name=document.getElementById('clientName').value.trim();
+  const phone=document.getElementById('clientPhone').value.trim();
+  const notes=document.getElementById('clientNotes').value.trim();
+  if(!name&&!phone){toast('Indique nombre/apodo o teléfono.');return}
+  loading(true);
+  const payload={name:name||phone,phone:phone||null,notes:notes||null,updated_at:new Date().toISOString()};
+  const q=id
+    ? await sb.from('beauty_clients').update(payload).eq('id',id)
+    : await sb.from('beauty_clients').insert({...payload,created_by:session.user.id});
+  loading(false);
+  if(q.error){toast('No se guardó. '+q.error.message);return}
+  document.getElementById('clientForm').classList.add('hide');
+  await refreshOperational();toast('Cliente guardado en Supabase.');
+};
+
+deleteClient=async function(id){
+  const c=clients.find(x=>x.id===id);if(!c)return;
+  if(!confirm(`¿Desactivar a ${c.name} de la base de clientes? El historial no se eliminará.`))return;
+  const {error}=await sb.from('beauty_clients').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se pudo desactivar. '+error.message);return}
+  await refreshOperational();toast('Cliente desactivado; historial conservado.');
+};
+
+upsertClientFromAppointment=async function(name,phone){
+  const nm=String(name||'').trim(), ph=normalizePhone(phone);
+  if(!nm&&!ph)return null;
+  let c=clients.find(x=>(ph&&normalizePhone(x.phone)===ph)||String(x.name||'').trim().toLowerCase()===nm.toLowerCase());
+  if(c){
+    const {error}=await sb.from('beauty_clients').update({name:nm||c.name,phone:phone||c.phone||null,updated_at:new Date().toISOString()}).eq('id',c.id);
+    if(error)throw error;
+    return c.id;
+  }
+  const {data,error}=await sb.from('beauty_clients').insert({name:nm||phone,phone:phone||null,created_by:session.user.id}).select('id').single();
+  if(error)throw error;
+  return data.id;
+};
+
+setServiceGroup=async function(id,g){
+  g=normalizedGroup(g);
+  const {error}=await sb.from('beauty_service_groups').upsert({service_id:id,service_group:g,updated_by:session.user.id,updated_at:new Date().toISOString()});
+  if(error){toast('No se guardó. '+error.message);return}
+  serviceGroups[String(id)]=g;fillJobServiceOptions();fillAppointmentServiceOptions();renderCombos();toast('Grupo guardado en Supabase.');
+};
+
+saveCombo=async function(){
+  const name=document.getElementById('comboName').value.trim(), price=Number(document.getElementById('comboPrice').value||0), group=normalizedGroup(document.getElementById('comboGroup').value);
+  const ids=[...document.querySelectorAll('.comboSvc:checked')].map(x=>x.value);
+  if(!name||!price||ids.length<2){toast('Indique nombre, precio y al menos dos servicios.');return}
+  loading(true);
+  const {data,error}=await sb.from('beauty_combos').insert({name,price,service_group:group,created_by:session.user.id}).select('id').single();
+  if(error){loading(false);toast('No se guardó. '+error.message);return}
+  const rel=await sb.from('beauty_combo_services').insert(ids.map(service_id=>({combo_id:data.id,service_id})));
+  loading(false);
+  if(rel.error){
+    await sb.from('beauty_combos').delete().eq('id',data.id);
+    toast('No se guardó el combo completo. '+rel.error.message);return;
+  }
+  document.getElementById('comboName').value='';document.getElementById('comboPrice').value='';
+  document.querySelectorAll('.comboSvc').forEach(x=>x.checked=false);
+  await refreshOperational();toast('Combo guardado en Supabase.');
+};
+
+toggleCombo=async function(id){
+  const c=combos.find(x=>x.id===id);if(!c)return;
+  const {error}=await sb.from('beauty_combos').update({active:!(c.active!==false),updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se pudo actualizar. '+error.message);return}
+  await refreshOperational();
+};
+
+saveAppointment=async function(){
+  const client=document.getElementById('apptClient').value.trim(), phone=document.getElementById('apptPhone').value.trim();
+  const professional_id=document.getElementById('apptWorker').value, selected=document.getElementById('apptService').value;
+  const date=document.getElementById('apptDate').value, time=document.getElementById('apptTime').value;
+  const duration=Number(document.getElementById('apptDuration').value||60), listPrice=Number(document.getElementById('apptPrice').value||0);
+  const specialRaw=Number(document.getElementById('apptSpecialPrice')?.value||0), special_reason=document.getElementById('apptSpecialReason')?.value||'';
+  const notes=document.getElementById('apptNotes').value.trim();
+  if(!client||!professional_id||!date||!time){toast('Complete cliente, profesional, fecha y hora.');return}
+  const conflict=appointments.some(a=>a.worker_id===professional_id&&a.date===date&&!['cancelled','noshow'].includes(a.status)&&overlap(time,duration,a.time,a.duration));
+  const block=scheduleBlocks.some(b=>b.worker_id===professional_id&&b.date===date&&timeToMin(time)<timeToMin(b.to)&&timeToMin(b.from)<timeToMin(time)+duration);
+  if((conflict||block)&&!confirm(conflict?'Ese profesional ya tiene una cita que coincide. ¿Guardar de todas formas?':'Ese horario está bloqueado. ¿Guardar de todas formas?'))return;
+  loading(true);
+  try{
+    const client_id=await upsertClientFromAppointment(client,phone);
+    const appointment_at=new Date(`${date}T${time}:00-06:00`).toISOString();
+    const isCombo=String(selected).startsWith('combo:');
+    const payload={client_id,client_name:client,phone:phone||null,professional_id,
+      service_id:isCombo?null:selected||null,combo_id:isCombo?selected.slice(6):null,
+      appointment_at,duration_minutes:duration,list_price:listPrice||null,
+      special_price:specialRaw>0?specialRaw:null,special_reason:special_reason||null,
+      notes:notes||null,updated_at:new Date().toISOString()};
+    const editId=document.getElementById('apptEditId')?.value||'';
+    const q=editId
+      ? await sb.from('beauty_appointments').update(payload).eq('id',editId)
+      : await sb.from('beauty_appointments').insert({...payload,status:'pending',created_by:session.user.id});
+    if(q.error)throw q.error;
+    document.getElementById('apptEditId').value='';
+    document.getElementById('appointmentFormTitle').textContent='Nueva cita';
+    document.getElementById('appointmentForm').classList.add('hide');
+    await refreshOperational();toast(editId?'Cita actualizada en Supabase.':'Cita guardada en Supabase.');
+  }catch(e){toast('No se guardó la cita. '+e.message)}
+  finally{loading(false)}
+};
+
+setAppointmentStatus=async function(id,status){
+  const {error}=await sb.from('beauty_appointments').update({status,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se guardó el estado. '+error.message);return}
+  await refreshOperational();toast('Estado actualizado.');
+};
+
+sendAppointmentConfirmation=async function(id){
+  const a=appointments.find(x=>x.id===id);if(!a)return;
+  const phone=crWhatsappNumber(a.phone);if(!phone){toast('Esta cita no tiene número de WhatsApp.');return}
+  const d=new Date(a.date+'T12:00:00');
+  const dateText=d.toLocaleDateString('es-CR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const msg=`Hola ${a.client} 😊%0A%0ATe confirmamos tu cita en IKER STUDIO:%0A✂️ ${apptServiceName(a.service_id)}%0A👤 Profesional: ${apptWorkerName(a.worker_id)}%0A📅 ${dateText}%0A🕒 ${a.time}%0A%0APor favor confírmanos que podrás asistir. ¡Te esperamos!`;
+  window.open(`https://wa.me/${phone}?text=${msg}`,'_blank');
+  const {error}=await sb.from('beauty_appointments').update({status:'confirmed',confirmation_sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',id);
+  if(!error)await refreshOperational(); else toast('WhatsApp abrió, pero no se pudo guardar la confirmación: '+error.message);
+};
+
+saveScheduleBlock=async function(){
+  const worker_id=document.getElementById('blockWorker').value,date=document.getElementById('blockDate').value;
+  const from=document.getElementById('blockFrom').value,to=document.getElementById('blockTo').value,reason=document.getElementById('blockReason').value.trim();
+  if(!worker_id||!date||!from||!to||timeToMin(to)<=timeToMin(from)){toast('Complete un bloqueo válido.');return}
+  const starts_at=new Date(`${date}T${from}:00-06:00`).toISOString(), ends_at=new Date(`${date}T${to}:00-06:00`).toISOString();
+  const {error}=await sb.from('beauty_schedule_blocks').insert({professional_id:worker_id,starts_at,ends_at,reason:reason||null,created_by:session.user.id});
+  if(error){toast('No se guardó el bloqueo. '+error.message);return}
+  document.getElementById('blockForm').classList.add('hide');await refreshOperational();toast('Horario bloqueado en Supabase.');
+};
+
+saveJob=async function(){
+  const workerId=jobWorker.value, serviceId=jobService.value, amount=Number(jobAmount.value||0);
+  const payment_method=document.querySelector('input[name="payMethod"]:checked')?.value||'cash';
+  if(!workerId||!serviceId||amount<=0){toast('Complete profesional, servicio y monto.');return}
+  const prof=professionals.find(p=>String(p.id)===String(workerId)), svc=services.find(x=>String(x.id)===String(serviceId));
+  if(!prof||!svc){toast('Seleccione profesional y servicio registrados.');return}
+  const client=jobClient.value||'';
+  loading(true);
+  const {error}=await sb.from('beauty_jobs').insert({
+    worker_id:null,professional_id:workerId,client_name:client||null,service_id:serviceId,
+    description:svc.name,amount,commission_rate:50,payment_method,created_by:session.user.id
+  });
+  loading(false);
+  if(error){toast('NO se guardó el trabajo. '+error.message);return}
+  const opened=await openProfessionalJobWhatsApp(prof,svc,amount,client,payment_method);
+  jobClient.value='';jobAmount.value='';
+  toast(opened?'Trabajo confirmado en Supabase. Comprobante preparado.':'Trabajo confirmado en Supabase.');
+  await loadAll();show('resumen',document.querySelector('[data-view="resumen"]'));
+};
+
+// V25 safety: no business data is intentionally persisted in browser storage.
+
+
+/* ===== V26: edición administrativa y menú independiente de Servicios ===== */
+function newServiceForm(){
+  serviceEditId.value='';serviceEditName.value='';serviceEditPrice.value='';serviceEditGroup.value='unisex';
+  serviceFormTitle.textContent='Nuevo servicio';serviceForm.classList.remove('hide');
+}
+function editServiceRecord(id){
+  const x=services.find(v=>v.id===id);if(!x)return;
+  serviceEditId.value=x.id;serviceEditName.value=x.name||'';serviceEditPrice.value=x.base_price??'';
+  serviceEditGroup.value=serviceGroup(x);serviceFormTitle.textContent='Editar servicio';serviceForm.classList.remove('hide');
+}
+async function saveServiceRecord(){
+  const id=serviceEditId.value,name=serviceEditName.value.trim(),raw=serviceEditPrice.value,base_price=raw===''?null:Number(raw),group=normalizedGroup(serviceEditGroup.value);
+  if(!name){toast('Escriba el nombre del servicio.');return}
+  loading(true);
+  const q=id
+    ? await sb.from('beauty_services').update({name,base_price,commission_rate:50}).eq('id',id)
+    : await sb.from('beauty_services').insert({name,base_price,commission_rate:50}).select('id').single();
+  if(q.error){loading(false);toast('No se guardó el servicio. '+q.error.message);return}
+  const sid=id||q.data.id;
+  const g=await sb.from('beauty_service_groups').upsert({service_id:sid,service_group:group,updated_by:session.user.id,updated_at:new Date().toISOString()});
+  loading(false);
+  if(g.error){toast('Servicio guardado, pero falló la clasificación: '+g.error.message);return}
+  serviceForm.classList.add('hide');await loadAll();renderServicesManager();toast('Servicio guardado en Supabase.');
+}
+async function deleteServiceRecord(id){
+  const x=services.find(v=>v.id===id);if(!x)return;
+  if(!confirm(`¿Eliminar "${x.name}" de los servicios disponibles?\n\nEl historial de trabajos anteriores se conservará.`))return;
+  loading(true);
+  const {error}=await sb.from('beauty_services').update({active:false}).eq('id',id);
+  loading(false);
+  if(error){toast('No se pudo eliminar. '+error.message);return}
+  await loadAll();renderServicesManager();toast('Servicio eliminado de la lista activa. Historial conservado.');
+}
+async function restoreServiceRecord(id){
+  const {error}=await sb.from('beauty_services').update({active:true}).eq('id',id);
+  if(error){toast('No se pudo restaurar. '+error.message);return}
+  await loadAll();renderServicesManager();toast('Servicio restaurado.');
+}
+function renderServicesManager(){
+  const box=document.getElementById('serviceManagerList');if(!box)return;
+  const q=(document.getElementById('serviceSearch')?.value||'').trim().toLowerCase();
+  const arr=services.filter(x=>!q||String(x.name||'').toLowerCase().includes(q));
+  box.innerHTML=arr.length?arr.map(x=>`<div class="row">
+    <div><b>${esc(x.name)}</b><div class="small">${serviceGroup(x)} · ${x.base_price!=null?money(x.base_price):'Precio se define al cobrar'} · Comisión 50% ${x.active===false?'· INACTIVO':''}</div></div>
+    <div class="right">${x.active===false
+      ?`<button class="secondary" onclick="restoreServiceRecord('${x.id}')">Restaurar</button>`
+      :`<button class="secondary" onclick="editServiceRecord('${x.id}')">✏️ Editar</button><button class="secondary danger" onclick="deleteServiceRecord('${x.id}')">Eliminar</button>`}</div>
+  </div>`).join(''):'<div class="empty">No hay servicios con esa búsqueda.</div>';
+}
+function editJobRecord(id){
+  const j=jobs.find(x=>String(x.id)===String(id));if(!j)return;
+  editJobId.value=j.id;
+  editJobProfessional.innerHTML=professionals.filter(p=>p.active!==false||p.id===jobProfessionalId(j)).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  editJobProfessional.value=jobProfessionalId(j);
+  editJobService.innerHTML=services.filter(x=>x.active!==false||x.id===j.service_id).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  editJobService.value=j.service_id||'';
+  editJobClient.value=j.client_name||'';editJobAmount.value=j.amount||0;editJobPayment.value=j.payment_method||'cash';
+  jobEditModal.classList.remove('hide');
+}
+async function saveJobEdit(){
+  const id=editJobId.value,amount=Number(editJobAmount.value||0);
+  if(!id||!editJobProfessional.value||!editJobService.value||amount<=0){toast('Complete profesional, servicio y monto.');return}
+  const svc=services.find(x=>x.id===editJobService.value);
+  loading(true);
+  const {error}=await sb.from('beauty_jobs').update({
+    professional_id:editJobProfessional.value,worker_id:null,service_id:editJobService.value,
+    description:svc?.name||null,client_name:editJobClient.value.trim()||null,amount,
+    payment_method:editJobPayment.value,commission_rate:50
+  }).eq('id',id);
+  loading(false);
+  if(error){toast('NO se guardaron los cambios. '+error.message);return}
+  jobEditModal.classList.add('hide');await loadAll();renderHistory();toast('Registro actualizado en Supabase.');
+}
+async function deleteJobRecord(id){
+  const j=jobs.find(x=>String(x.id)===String(id));if(!j)return;
+  if(!confirm(`¿Eliminar este registro de ${workerName(jobProfessionalId(j))} por ${money(j.amount)}?\n\nEsta acción elimina el movimiento económico del historial.`))return;
+  loading(true);
+  const {error}=await sb.from('beauty_jobs').delete().eq('id',id);
+  loading(false);
+  if(error){toast('No se pudo eliminar. '+error.message);return}
+  await loadAll();renderHistory();toast('Registro eliminado.');
+}
+// Keep legacy add button compatible if any old UI path calls it.
+addService=async function(){newServiceForm();};
+
+
+/* ===== V27: corrección Resumen/Producción diaria =====
+   Los trabajos nuevos usan professional_id en Supabase.
+   La fecha se evalúa en America/Costa_Rica para evitar desfases UTC.
+*/
+function jobLocalDate(j){
+  const raw=j?.performed_at||j?.created_at||j?.job_date;
+  if(!raw)return '';
+  const d=new Date(raw);
+  if(Number.isNaN(d.getTime())) return String(raw).slice(0,10);
+  return d.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
+}
+function isJobToday(j){ return jobLocalDate(j)===localDate(); }
+
+// Re-render dashboard with the persistent professional relation.
+function renderDashboard(){
+ const today=jobs.filter(isJobToday);
+ const sales=today.reduce((a,j)=>a+Number(j.amount||0),0);
+ const cash=today.filter(j=>j.payment_method==='cash').reduce((a,j)=>a+Number(j.amount||0),0);
+ const sinpe=today.filter(j=>j.payment_method==='sinpe').reduce((a,j)=>a+Number(j.amount||0),0);
+ const commissions=today.reduce((a,j)=>a+Number(j.amount||0)*(Number(j.commission_rate||50)/100),0);
+ if(document.getElementById('todaySales')) todaySales.textContent=money(sales);
+ if(document.getElementById('todayCash')) todayCash.textContent=money(cash);
+ if(document.getElementById('todaySinpe')) todaySinpe.textContent=money(sinpe);
+ if(document.getElementById('todayCommissions')) todayCommissions.textContent=money(commissions);
+ const box=document.getElementById('todayJobs');
+ if(box) box.innerHTML=today.length?today.map(j=>`<div class="row"><div><b>${esc(workerName(jobProfessionalId(j)))}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount||0)*(Number(j.commission_rate||50)/100))}</div></div></div>`).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
+}
+
+
+/* ===== V29 FINAL DASHBOARD OVERRIDE =====
+   Must remain the last renderDashboard definition in the file.
+*/
+function renderDashboard(){
+  const today=jobs.filter(j=>{
+    const raw=j?.performed_at||j?.created_at||j?.job_date;
+    if(!raw)return false;
+    const d=new Date(raw);
+    const cr=Number.isNaN(d.getTime())?String(raw).slice(0,10):
+      d.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
+    return cr===localDate();
+  });
+  const total=arr=>arr.reduce((a,j)=>a+Number(j.amount||0),0);
+  const sales=total(today);
+  const cash=total(today.filter(j=>j.payment_method==='cash'));
+  const sinpe=total(today.filter(j=>j.payment_method==='sinpe'));
+  const commissions=today.reduce((a,j)=>a+Number(j.amount||0)*(Number(j.commission_rate||50)/100),0);
+
+  const set=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val};
+  set('todaySales',money(sales));
+  set('todayCash',money(cash));
+  set('todaySinpe',money(sinpe));
+  set('todayCommissions',money(commissions));
+
+  const box=document.getElementById('todayJobs');
+  if(box) box.innerHTML=today.length?today.map(j=>{
+    const pid=j.professional_id||j.worker_id||'';
+    const pname=professionalName(pid)||team.find(x=>x.user_id===pid)?.profile?.full_name||'Profesional';
+    return `<div class="row"><div><b>${esc(pname)}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount||0)*(Number(j.commission_rate||50)/100))}</div></div></div>`;
+  }).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
+}
+
+
+/* ===== V30: dashboard corregido contra los IDs REALES del HTML ===== */
+function renderDashboard(){
+  const today=jobs.filter(j=>{
+    const raw=j?.performed_at||j?.created_at||j?.job_date;
+    if(!raw)return false;
+    const d=new Date(raw);
+    const cr=Number.isNaN(d.getTime()) ? String(raw).slice(0,10)
+      : d.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
+    return cr===localDate();
+  });
+
+  const sales=today.reduce((a,j)=>a+Number(j.amount||0),0);
+  const cash=today.filter(j=>j.payment_method==='cash').reduce((a,j)=>a+Number(j.amount||0),0);
+  const sinpe=today.filter(j=>j.payment_method==='sinpe').reduce((a,j)=>a+Number(j.amount||0),0);
+  const comm=today.reduce((a,j)=>a+Number(j.amount||0)*(Number(j.commission_rate||50)/100),0);
+
+  // IDs reales existentes en esta interfaz
+  const put=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val};
+  put('salesToday',money(sales));
+  put('cashToday',money(cash));
+  put('sinpeToday',money(sinpe));
+  put('commToday',money(comm));
+
+  const by={};
+  today.forEach(j=>{
+    const pid=j.professional_id||j.worker_id||'';
+    if(!by[pid])by[pid]={sales:0,comm:0,count:0};
+    by[pid].sales+=Number(j.amount||0);
+    by[pid].comm+=Number(j.amount||0)*(Number(j.commission_rate||50)/100);
+    by[pid].count++;
+  });
+
+  const box=document.getElementById('todayWorkers');
+  if(box){
+    box.innerHTML=Object.keys(by).length
+      ? Object.entries(by).map(([id,x])=>{
+          const pname=professionalName(id)||team.find(t=>t.user_id===id)?.profile?.full_name||'Profesional';
+          return `<div class="row"><div><b>${esc(pname)}</b><div class="small">${x.count} trabajo(s)</div></div><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`;
+        }).join('')
+      : '<div class="empty">Sin trabajos registrados hoy.</div>';
+  }
+}
+
 </script>
 
 </body></html>
