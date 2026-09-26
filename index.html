@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- V31: Resumen + seguridad corregidos -->
 <title>IKER Studio · V2.0</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#201a1d">
@@ -592,23 +593,39 @@ async function beautyAudit(action,entity_type=null,entity_id=null,before_data=nu
   await sb.from('app_audit_log').insert({app:'beauty',actor_user_id:session.user.id,action,entity_type,entity_id:entity_id||null,before_data,after_data,reason,device_id:d.device_id,device_type:d.device_type,browser:d.browser,platform:d.platform,user_agent:d.user_agent});
  }catch(e){console.warn('Auditoría no disponible todavía',e)}
 }
+function openSecurityModal(){
+ const m=document.getElementById('securityModal');
+ if(m)m.style.display='flex';
+}
+function closeSecurityModal(){
+ const m=document.getElementById('securityModal');
+ if(m)m.style.display='none';
+}
+function closeModal(){ closeSecurityModal(); }
+
 async function openBeautyAudit(){
  const {data,error}=await sb.from('app_audit_log').select('*').eq('app','beauty').order('created_at',{ascending:false}).limit(150);
  if(error){toast('Falta activar la actualización de auditoría en Supabase.');return}
  const ids=[...new Set((data||[]).map(x=>x.actor_user_id).filter(Boolean))],names={};
  if(ids.length){const {data:p}=await sb.from('app_profiles').select('user_id,full_name').in('user_id',ids);(p||[]).forEach(x=>names[x.user_id]=x.full_name)}
  const rows=(data||[]).map(x=>`<div class="row"><div><b>${esc(names[x.actor_user_id]||'Usuario')} · ${esc(x.action)}</b><div class="small">${new Date(x.created_at).toLocaleString('es-CR')} · ${esc(x.device_type||'Equipo')} · ${esc(x.browser||'')} · ${esc(String(x.device_id||'').slice(0,8))}</div></div></div>`).join('');
- sheet.innerHTML=`<h3>🔐 Auditoría</h3>${rows||'<div class="empty">Todavía no hay eventos.</div>'}<button class="secondary big" onclick="closeModal()">Cerrar</button>`;modal.classList.add('show');
+ document.getElementById('securitySheet').innerHTML=`<h3>🔐 Auditoría</h3>${rows||'<div class="empty">Todavía no hay eventos.</div>'}<button class="secondary big" onclick="closeModal()">Cerrar</button>`;openSecurityModal();
+}
+function beautyPasswordSetupKey(){return 'iker_pw_setup_'+(session?.user?.id||'user')}
+function needsBeautyPasswordSetup(){return !!session?.user?.id && localStorage.getItem(beautyPasswordSetupKey())!=='ok'}
+function openBeautyPasswordRequired(){
+ document.getElementById('securitySheet').innerHTML=`<h3>🔐 Proteja su acceso</h3><div class="small">Antes de continuar, cambie la contraseña temporal por una contraseña personal de al menos 8 caracteres.</div><label>Nueva contraseña</label><input id="beautyPw1" type="password" minlength="8" autocomplete="new-password"><label>Repita la contraseña</label><input id="beautyPw2" type="password" minlength="8" autocomplete="new-password"><div class="actions"><button class="primary big" onclick="changeBeautyPassword(true)">Guardar y continuar</button></div>`;
+ openSecurityModal();
 }
 function openBeautyPassword(){
- sheet.innerHTML=`<h3>Cambiar mi contraseña</h3><label>Nueva contraseña</label><input id="beautyPw1" type="password" minlength="8"><label>Repita la contraseña</label><input id="beautyPw2" type="password" minlength="8"><div class="actions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="changeBeautyPassword()">Guardar</button></div>`;modal.classList.add('show');
+ document.getElementById('securitySheet').innerHTML=`<h3>Cambiar mi contraseña</h3><label>Nueva contraseña</label><input id="beautyPw1" type="password" minlength="8"><label>Repita la contraseña</label><input id="beautyPw2" type="password" minlength="8"><div class="actions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="changeBeautyPassword()">Guardar</button></div>`;openSecurityModal();
 }
-async function changeBeautyPassword(){
+async function changeBeautyPassword(required=false){
  if(beautyPw1.value.length<8)return toast('Use al menos 8 caracteres.');
  if(beautyPw1.value!==beautyPw2.value)return toast('Las contraseñas no coinciden.');
  loading(true);const {error}=await sb.auth.updateUser({password:beautyPw1.value});loading(false);
  if(error)return toast(error.message);
- await beautyAudit('password_changed','auth_user',session.user.id);closeModal();toast('Contraseña actualizada.');
+ await beautyAudit('password_changed','auth_user',session.user.id);localStorage.setItem(beautyPasswordSetupKey(),'ok');closeModal();toast('Contraseña actualizada.');
 }
 
 async function logout(){await beautyAudit('logout');await sb.auth.signOut();location.reload()}
@@ -643,6 +660,7 @@ async function boot(s){
  try{
    await loadAll();
    renderDashboard();
+   if(needsBeautyPasswordSetup()) setTimeout(openBeautyPasswordRequired,120);
  }catch(e){
    console.error('IKER Studio:',e);
    toast('La aplicación cargó, pero una sección presentó un error.');
@@ -2132,12 +2150,12 @@ function renderDashboard(){
   const commissions=today.reduce((a,j)=>a+Number(j.amount||0)*(Number(j.commission_rate||50)/100),0);
 
   const set=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val};
-  set('todaySales',money(sales));
-  set('todayCash',money(cash));
-  set('todaySinpe',money(sinpe));
-  set('todayCommissions',money(commissions));
+  set('salesToday',money(sales));
+  set('cashToday',money(cash));
+  set('sinpeToday',money(sinpe));
+  set('commToday',money(commissions));
 
-  const box=document.getElementById('todayJobs');
+  const box=document.getElementById('todayWorkers');
   if(box) box.innerHTML=today.length?today.map(j=>{
     const pid=j.professional_id||j.worker_id||'';
     const pname=professionalName(pid)||team.find(x=>x.user_id===pid)?.profile?.full_name||'Profesional';
@@ -2146,5 +2164,11 @@ function renderDashboard(){
 }
 
 </script>
+
+
+<!-- V32: modal independiente para Seguridad / Auditoría -->
+<div id="securityModal" onclick="if(event.target===this)closeSecurityModal()" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(20,20,20,.58);align-items:flex-end;justify-content:center;padding:0">
+  <div id="securitySheet" style="width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;padding:20px;box-shadow:0 -10px 35px rgba(0,0,0,.18)"></div>
+</div>
 
 </body></html>
