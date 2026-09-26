@@ -489,6 +489,14 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 
 <section id="negocio" class="view">
 <div class="sectionTitle"><h2>Negocio</h2></div>
+<div class="panel ownerTab" style="margin-bottom:12px">
+ <h3>🔐 Seguridad</h3>
+ <div class="small">Accesos y soporte técnico, separado de la operación del salón.</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+  <button class="secondary" onclick="openBeautyAudit()">Auditoría</button>
+  <button class="secondary" onclick="openBeautyPassword()">Cambiar mi contraseña</button>
+ </div>
+</div>
 <p class="muted">Resumen del período: cuánto se vendió, cómo ingresó el dinero, cuánto corresponde al equipo y cuánto queda para el negocio.</p>
 <div class="biz-tools">
   <label>Período
@@ -562,6 +570,7 @@ function toggle(id){document.getElementById(id).classList.toggle('hide')}
 function show(id,btn){if(id==='equipo')setTimeout(()=>{renderProfessionals();fillProfessionalSelectors()},0);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');if(id==='historial')renderHistory();if(id==='citas')renderAppointments();if(id==='clientes')renderClients();if(id==='combos')renderCombos();if(id==='servicios')renderServicesManager()}
 function setPay(m){payMethod=m;payCash.classList.toggle('on',m==='cash');paySinpe.classList.toggle('on',m==='sinpe')}
 function isAdmin(){return ['owner','admin'].includes(role)}
+function isTechnical(){return role==='technical_support'}
 
 async function login(){
  document.getElementById('loginMsg').textContent=''; loading(true);
@@ -569,7 +578,40 @@ async function login(){
  if(error){loading(false);document.getElementById('loginMsg').textContent='No se pudo ingresar. Revise correo y contraseña.';return}
  await boot(data.session);
 }
-async function logout(){await sb.auth.signOut();location.reload()}
+
+function beautyDeviceInfo(){
+ let id=localStorage.getItem('iker_device_id');
+ if(!id){id=(crypto.randomUUID?crypto.randomUUID():'dev-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('iker_device_id',id)}
+ const ua=navigator.userAgent||'', mobile=/Android|iPhone|iPad|Mobile/i.test(ua);
+ return {device_id:id,device_type:mobile?'Móvil':'Computadora',browser:ua.includes('Edg/')?'Edge':ua.includes('Chrome/')?'Chrome':ua.includes('Firefox/')?'Firefox':ua.includes('Safari/')?'Safari':'Navegador',platform:navigator.platform||'No disponible',user_agent:ua};
+}
+async function beautyAudit(action,entity_type=null,entity_id=null,before_data=null,after_data=null,reason=null){
+ try{
+  if(!session?.user?.id)return;
+  const d=beautyDeviceInfo();
+  await sb.from('app_audit_log').insert({app:'beauty',actor_user_id:session.user.id,action,entity_type,entity_id:entity_id||null,before_data,after_data,reason,device_id:d.device_id,device_type:d.device_type,browser:d.browser,platform:d.platform,user_agent:d.user_agent});
+ }catch(e){console.warn('Auditoría no disponible todavía',e)}
+}
+async function openBeautyAudit(){
+ const {data,error}=await sb.from('app_audit_log').select('*').eq('app','beauty').order('created_at',{ascending:false}).limit(150);
+ if(error){toast('Falta activar la actualización de auditoría en Supabase.');return}
+ const ids=[...new Set((data||[]).map(x=>x.actor_user_id).filter(Boolean))],names={};
+ if(ids.length){const {data:p}=await sb.from('app_profiles').select('user_id,full_name').in('user_id',ids);(p||[]).forEach(x=>names[x.user_id]=x.full_name)}
+ const rows=(data||[]).map(x=>`<div class="row"><div><b>${esc(names[x.actor_user_id]||'Usuario')} · ${esc(x.action)}</b><div class="small">${new Date(x.created_at).toLocaleString('es-CR')} · ${esc(x.device_type||'Equipo')} · ${esc(x.browser||'')} · ${esc(String(x.device_id||'').slice(0,8))}</div></div></div>`).join('');
+ sheet.innerHTML=`<h3>🔐 Auditoría</h3>${rows||'<div class="empty">Todavía no hay eventos.</div>'}<button class="secondary big" onclick="closeModal()">Cerrar</button>`;modal.classList.add('show');
+}
+function openBeautyPassword(){
+ sheet.innerHTML=`<h3>Cambiar mi contraseña</h3><label>Nueva contraseña</label><input id="beautyPw1" type="password" minlength="8"><label>Repita la contraseña</label><input id="beautyPw2" type="password" minlength="8"><div class="actions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="changeBeautyPassword()">Guardar</button></div>`;modal.classList.add('show');
+}
+async function changeBeautyPassword(){
+ if(beautyPw1.value.length<8)return toast('Use al menos 8 caracteres.');
+ if(beautyPw1.value!==beautyPw2.value)return toast('Las contraseñas no coinciden.');
+ loading(true);const {error}=await sb.auth.updateUser({password:beautyPw1.value});loading(false);
+ if(error)return toast(error.message);
+ await beautyAudit('password_changed','auth_user',session.user.id);closeModal();toast('Contraseña actualizada.');
+}
+
+async function logout(){await beautyAudit('logout');await sb.auth.signOut();location.reload()}
 
 
 const IKER_CLEAN_START='2026-09-19T21:40:00.000Z';
@@ -593,7 +635,7 @@ async function boot(s){
   sb.from('app_access').select('role,active').eq('user_id',uid).eq('app','beauty').maybeSingle()
  ]);
  if(ae||!a||!a.active){loading(false);document.getElementById('loginMsg').textContent='Esta cuenta todavía no tiene acceso a IKER STUDIO.';await sb.auth.signOut();return}
- profile=p||{full_name:s.user.email}; role=a.role;
+ profile=p||{full_name:s.user.email}; role=a.role; await beautyAudit('login');
  document.getElementById('loginScreen').classList.add('hide'); document.getElementById('app').classList.remove('hide');
  hello.textContent='Hola, '+(profile.full_name||'').split(' ')[0]+'.';
  avatar.textContent=(profile.full_name||'I').charAt(0).toUpperCase();
@@ -1820,22 +1862,10 @@ saveClient=async function(){
 
 deleteClient=async function(id){
   const c=clients.find(x=>x.id===id);if(!c)return;
-  const relatedAppointments=appointments.filter(a=>String(a.client_id||'')===String(id)).length;
-  const relatedJobs=jobs.filter(j=>String(j.client_id||'')===String(id)).length;
-  const hasHistory=(relatedAppointments+relatedJobs)>0;
-  const msg=hasHistory
-    ? `¿Ocultar a ${c.name} de la lista de clientes?\n\nTiene historial registrado y NO se borrará. El cliente dejará de aparecer en listas y selecciones nuevas.`
-    : `¿Eliminar a ${c.name}?\n\nComo no tiene historial asociado, se intentará eliminar por completo. Si la base no permite borrarlo, se ocultará sin perder información.`;
-  if(!confirm(msg))return;
-  loading(true);
-  if(!hasHistory){
-    const del=await sb.from('beauty_clients').delete().eq('id',id);
-    if(!del.error){loading(false);await refreshOperational();toast('Cliente eliminado.');return}
-  }
-  const upd=await sb.from('beauty_clients').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
-  loading(false);
-  if(upd.error){toast('No se pudo ocultar. La base de datos no permite esta operación todavía: '+upd.error.message);return}
-  await refreshOperational();toast('Cliente ocultado de las listas; historial conservado.');
+  if(!confirm(`¿Desactivar a ${c.name} de la base de clientes? El historial no se eliminará.`))return;
+  const {error}=await sb.from('beauty_clients').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast('No se pudo desactivar. '+error.message);return}
+  await refreshOperational();toast('Cliente desactivado; historial conservado.');
 };
 
 upsertClientFromAppointment=async function(name,phone){
@@ -2113,50 +2143,6 @@ function renderDashboard(){
     const pname=professionalName(pid)||team.find(x=>x.user_id===pid)?.profile?.full_name||'Profesional';
     return `<div class="row"><div><b>${esc(pname)}</b><div class="small">${esc(serviceName(j.service_id))}${j.client_name?' · '+esc(j.client_name):''} · ${j.payment_method==='cash'?'Efectivo':'SINPE'}</div></div><div class="right"><div class="money">${money(j.amount)}</div><div class="small">Comisión ${money(Number(j.amount||0)*(Number(j.commission_rate||50)/100))}</div></div></div>`;
   }).join(''):'<div class="empty">Sin trabajos registrados hoy.</div>';
-}
-
-
-/* ===== V30: dashboard corregido contra los IDs REALES del HTML ===== */
-function renderDashboard(){
-  const today=jobs.filter(j=>{
-    const raw=j?.performed_at||j?.created_at||j?.job_date;
-    if(!raw)return false;
-    const d=new Date(raw);
-    const cr=Number.isNaN(d.getTime()) ? String(raw).slice(0,10)
-      : d.toLocaleDateString('en-CA',{timeZone:'America/Costa_Rica'});
-    return cr===localDate();
-  });
-
-  const sales=today.reduce((a,j)=>a+Number(j.amount||0),0);
-  const cash=today.filter(j=>j.payment_method==='cash').reduce((a,j)=>a+Number(j.amount||0),0);
-  const sinpe=today.filter(j=>j.payment_method==='sinpe').reduce((a,j)=>a+Number(j.amount||0),0);
-  const comm=today.reduce((a,j)=>a+Number(j.amount||0)*(Number(j.commission_rate||50)/100),0);
-
-  // IDs reales existentes en esta interfaz
-  const put=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val};
-  put('salesToday',money(sales));
-  put('cashToday',money(cash));
-  put('sinpeToday',money(sinpe));
-  put('commToday',money(comm));
-
-  const by={};
-  today.forEach(j=>{
-    const pid=j.professional_id||j.worker_id||'';
-    if(!by[pid])by[pid]={sales:0,comm:0,count:0};
-    by[pid].sales+=Number(j.amount||0);
-    by[pid].comm+=Number(j.amount||0)*(Number(j.commission_rate||50)/100);
-    by[pid].count++;
-  });
-
-  const box=document.getElementById('todayWorkers');
-  if(box){
-    box.innerHTML=Object.keys(by).length
-      ? Object.entries(by).map(([id,x])=>{
-          const pname=professionalName(id)||team.find(t=>t.user_id===id)?.profile?.full_name||'Profesional';
-          return `<div class="row"><div><b>${esc(pname)}</b><div class="small">${x.count} trabajo(s)</div></div><div class="right"><div class="money">${money(x.sales)}</div><div class="small">Comisión ${money(x.comm)}</div></div></div>`;
-        }).join('')
-      : '<div class="empty">Sin trabajos registrados hoy.</div>';
-  }
 }
 
 </script>
