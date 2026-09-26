@@ -1820,10 +1820,22 @@ saveClient=async function(){
 
 deleteClient=async function(id){
   const c=clients.find(x=>x.id===id);if(!c)return;
-  if(!confirm(`¿Desactivar a ${c.name} de la base de clientes? El historial no se eliminará.`))return;
-  const {error}=await sb.from('beauty_clients').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
-  if(error){toast('No se pudo desactivar. '+error.message);return}
-  await refreshOperational();toast('Cliente desactivado; historial conservado.');
+  const relatedAppointments=appointments.filter(a=>String(a.client_id||'')===String(id)).length;
+  const relatedJobs=jobs.filter(j=>String(j.client_id||'')===String(id)).length;
+  const hasHistory=(relatedAppointments+relatedJobs)>0;
+  const msg=hasHistory
+    ? `¿Ocultar a ${c.name} de la lista de clientes?\n\nTiene historial registrado y NO se borrará. El cliente dejará de aparecer en listas y selecciones nuevas.`
+    : `¿Eliminar a ${c.name}?\n\nComo no tiene historial asociado, se intentará eliminar por completo. Si la base no permite borrarlo, se ocultará sin perder información.`;
+  if(!confirm(msg))return;
+  loading(true);
+  if(!hasHistory){
+    const del=await sb.from('beauty_clients').delete().eq('id',id);
+    if(!del.error){loading(false);await refreshOperational();toast('Cliente eliminado.');return}
+  }
+  const upd=await sb.from('beauty_clients').update({active:false,updated_at:new Date().toISOString()}).eq('id',id);
+  loading(false);
+  if(upd.error){toast('No se pudo ocultar. La base de datos no permite esta operación todavía: '+upd.error.message);return}
+  await refreshOperational();toast('Cliente ocultado de las listas; historial conservado.');
 };
 
 upsertClientFromAppointment=async function(name,phone){
