@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<!-- V31: Resumen + seguridad corregidos -->
-<title>IKER Studio · V2.0</title>
+<!-- V33: Administración de correo de usuarios + seguridad -->
+<title>IKER Studio · V33</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#201a1d">
 <meta name="application-name" content="IKER STUDIO">
@@ -492,10 +492,11 @@ main{margin-left:260px!important;max-width:none!important;padding:24px 30px 48px
 <div class="sectionTitle"><h2>Negocio</h2></div>
 <div class="panel ownerTab" style="margin-bottom:12px">
  <h3>🔐 Seguridad</h3>
- <div class="small">Accesos y soporte técnico, separado de la operación del salón.</div>
+ <div class="small">Accesos y soporte técnico, separado de la operación del salón. <span style="opacity:.65">v33</span></div>
  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
   <button class="secondary" onclick="openBeautyAudit()">Auditoría</button>
   <button class="secondary" onclick="openBeautyPassword()">Cambiar mi contraseña</button>
+   <button class="secondary" onclick="updateYadiraEmail()">Actualizar correo de Yadira</button>
  </div>
 </div>
 <p class="muted">Resumen del período: cuánto se vendió, cómo ingresó el dinero, cuánto corresponde al equipo y cuánto queda para el negocio.</p>
@@ -810,6 +811,33 @@ async function beautyUserAction(payload){
  if(data && data.ok===false) throw new Error(data.error||'No se pudo completar la acción.');
  return data;
 }
+async function updateYadiraEmail(){
+  const user_id='8fdaa27a-9c8c-4177-a68e-376da72522ff';
+  const email='yadira2021mallorga@gmail.com';
+
+  if(!isAdmin()){
+    toast('Solo el propietario o una administradora puede hacer este cambio.');
+    return;
+  }
+
+  if(!confirm(`¿Cambiar el correo de acceso de Yadira a ${email}?\n\nSe conservará la misma cuenta y su historial.`)) return;
+
+  try{
+    await beautyUserAction({action:'set_email',user_id,email});
+    await beautyAudit(
+      'email_changed',
+      'auth_user',
+      user_id,
+      {email:'yadira@ikerbusiness.com'},
+      {email}
+    );
+    toast('Correo de Yadira actualizado correctamente.');
+    alert(`Listo. El correo de acceso de Yadira ahora es:\n\n${email}\n\nYa puede enviarle la recuperación de contraseña desde Authentication → Users.`);
+  }catch(e){
+    toast('No se pudo cambiar el correo: '+e.message);
+  }
+}
+
 async function addTeamMember(){
  const full_name=teamName.value.trim(), email=teamEmail.value.trim(), password=teamPassword.value, r=teamRole.value;
  if(!full_name||!email||password.length<8)return toast('Complete nombre, correo y una contraseña temporal de al menos 8 caracteres.');
